@@ -1,0 +1,13 @@
+streamlit
+pandas
+plotly
+openpyxl
+torch
+transformers
+numpy
+scikit-learn
+tqdm
+wordcloud
+watchdog
+safetensors
+sentencepiece

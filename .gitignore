@@ -1,0 +1,10 @@
+# .gitignore
+__pycache__/
+*.pyc
+venv/
+.DS_Store
+.streamlit/
+# Ignore large model files
+models/
+# Ignore personal/sensitive data if any (optional, but good practice)
+# data/ 
