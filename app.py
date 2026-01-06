@@ -1,75 +1,46 @@
-import streamlit as st
+import time
 import pandas as pd
+import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+import textwrap
 
 from predict import get_multi_model_prediction  # GERÇEK TAHMİN MOTORU
 
 # =====================================================================
+# CONFIG & SETUP
+# =====================================================================
+st.set_page_config(
+    page_title="Üniversite Duygu Analiz Platformu",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# =====================================================================
 # SABİT METRİKLER (TEST SONUÇLARINDAN)
 # =====================================================================
-
 MODEL_METRICS = {
-    "BERTurk": {
-        "Accuracy": 0.9247,
-        "Macro F1": 0.9045,
-        "Precision": 0.9064,
-        "Recall": 0.9027,
-        "Support": 757,
-    },
-    "CNN-BiLSTM": {
-        "Accuracy": 0.8534,
-        "Macro F1": 0.7899,
-        "Precision": 0.8528,
-        "Recall": 0.7610,
-        "Support": 757,
-    },
-    "BiLSTM": {
-        "Accuracy": 0.8296,
-        "Macro F1": 0.7697,
-        "Precision": 0.7949,
-        "Recall": 0.7538,
-        "Support": 757,
-    },
-    "CNN": {
-        "Accuracy": 0.8151,
-        "Macro F1": 0.7558,
-        "Precision": 0.7702,
-        "Recall": 0.7453,
-        "Support": 757,
-    },
+    "BERTurk": {"Accuracy": 0.9247, "Macro F1": 0.9045, "Precision": 0.9064, "Recall": 0.9027, "Support": 757},
+    "CNN-BiLSTM": {"Accuracy": 0.8534, "Macro F1": 0.7899, "Precision": 0.8528, "Recall": 0.7610, "Support": 757},
+    "BiLSTM": {"Accuracy": 0.8296, "Macro F1": 0.7697, "Precision": 0.7949, "Recall": 0.7538, "Support": 757},
+    "CNN": {"Accuracy": 0.8151, "Macro F1": 0.7558, "Precision": 0.7702, "Recall": 0.7453, "Support": 757},
 }
 
-# Her model için SINIF (olumsuz / olumlu) bazlı metrikler
-# BERTurk değerleri senin classification_report çıktından alınmış.
-# Diğer modelleri elindeki çıktılara göre doldurabilirsin.
 MODEL_CLASS_METRICS = {
     "BERTurk": {
-        "0_olumsuz": {
-            "precision": 0.9458,
-            "recall": 0.9510,
-            "f1": 0.9484,
-            "support": 551,
-        },
-        "1_olumlu": {
-            "precision": 0.8670,
-            "recall": 0.8544,
-            "f1": 0.8606,
-            "support": 206,
-        },
+        "0_olumsuz": {"precision": 0.9458, "recall": 0.9510, "f1": 0.9484, "support": 551},
+        "1_olumlu": {"precision": 0.8670, "recall": 0.8544, "f1": 0.8606, "support": 206},
     },
     "CNN-BiLSTM": {
-        # TODO: burayı kendi CNN-BiLSTM classification_report çıktına göre doldur
         "0_olumsuz": {"precision": 0.8564, "recall": 0.9201, "f1": 0.8871, "support": 551},
         "1_olumlu": {"precision": 0.7333, "recall": 0.5874, "f1": 0.6523, "support": 206},
     },
     "BiLSTM": {
-        # TODO: burayı kendi BiLSTM classification_report çıktına göre doldur
         "0_olumsuz": {"precision": 0.8549, "recall": 0.8984, "f1": 0.8761, "support": 551},
         "1_olumlu": {"precision": 0.6854, "recall": 0.5922, "f1": 0.6354, "support": 206},
     },
     "CNN": {
-        # TODO: burayı kendi CNN classification_report çıktına göre doldur
         "0_olumsuz": {"precision": 0.8537, "recall": 0.9637, "f1": 0.9054, "support": 551},
         "1_olumlu": {"precision": 0.8519, "recall": 0.5583, "f1": 0.6745, "support": 206},
     },
@@ -78,90 +49,326 @@ MODEL_CLASS_METRICS = {
 
 @st.cache_data
 def load_main_dataset(path: str = "data/tweetVeriseti.xlsx"):
-    """Dashboard için ana veri setini yükler."""
     try:
-        df = pd.read_excel(path)
-        return df
+        return pd.read_excel(path)
     except Exception:
         return None
 
 
 DATA_DF = load_main_dataset()
 
-# === SESSION STATE: Aktif öğrenme havuzu & son analiz ===
+# =====================================================================
+# SESSION STATE INIT
+# =====================================================================
 if "active_pool" not in st.session_state:
     st.session_state["active_pool"] = []
-
 if "last_input" not in st.session_state:
     st.session_state["last_input"] = ""
-
 if "last_results" not in st.session_state:
     st.session_state["last_results"] = None
 
 # =====================================================================
-# SAYFA AYARLARI & CSS
+# HELPERS
 # =====================================================================
+def _escape_html(s: str) -> str:
+    s = "" if s is None else str(s)
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-st.set_page_config(
-    page_title="Üniversite Duygu Analiz Platformu",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
+def render_lab_card(text: str, res: dict):
+    txt_safe = _escape_html(text)
+
+    chips = []
+    for model_name in ["BERTurk", "CNN-BiLSTM", "BiLSTM", "CNN"]:
+        pred = res.get(model_name, (0, 0))[0] if res.get(model_name) else 0
+        dot_color = "#3fb950" if pred == 1 else "#f85149"
+        label = "POZİTİF" if pred == 1 else "NEGATİF"
+
+        chip_html = f"""
+<div class="pred-chip">
+  <div class="pred-left">
+    <span class="dot" style="background:{dot_color};"></span>
+    <span>{model_name}</span>
+  </div>
+  <div class="pred-right" style="color:{dot_color};">{label}</div>
+</div>
+""".strip()
+        chips.append(chip_html)
+
+    chips_html = "\n".join(chips)
+
+    html = f"""
+<div class="glass-card lab-card">
+  <div class="lab-meta">ÖRNEK METİN</div>
+  <div class="lab-textbox">{txt_safe}</div>
+
+  <div class="lab-meta">MODEL TAHMİNLERİ</div>
+  <div class="lab-preds">
+    {chips_html}
+  </div>
+</div>
+""".strip()
+
+    st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
+
+
+# =====================================================================
+# PREMIUM CSS STYLING
+# =====================================================================
 st.markdown(
     """
     <style>
-    /* Genel Arka Plan */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+
+    /* Remove top black bar / header + tighten padding */
+    header[data-testid="stHeader"] { display: none !important; }
+    div[data-testid="stToolbar"] { display: none !important; }
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+
+    /* Remove extra top padding that creates a "black bar" feeling */
+    .block-container { padding-top: 1.0rem !important; }
+    div[data-testid="stAppViewContainer"] > .main { padding-top: 0rem !important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+    /* App Background */
     .stApp {
-        background-color: #000000;
-        background-image: radial-gradient(circle at 50% 50%, #1e1e2f 0%, #000000 100%);
+        background-color: #0d1117;
+        background-image:
+            radial-gradient(circle at 10% 20%, rgba(88, 166, 255, 0.08) 0%, transparent 25%),
+            radial-gradient(circle at 90% 80%, rgba(63, 185, 80, 0.06) 0%, transparent 25%);
+        font-family: 'Inter', sans-serif;
+        color: #c9d1d9;
     }
 
-    /* Üst Başlık Stili */
-    h1, h2, h3 {
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 {
         color: #ffffff;
-        font-family: 'Segoe UI', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-weight: 800;
-        text-shadow: 0 0 10px #00d2ff;
+        letter-spacing: -0.5px;
+    }
+    p { line-height: 1.6; font-weight: 300; color: #c9d1d9; }
+
+    .main-title {
+        font-size: 3.5rem;
+        background: linear-gradient(135deg, #79c0ff 0%, #2f81f7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 40px rgba(47, 129, 247, 0.2);
+        margin-bottom: 0.5rem;
+    }
+    .subtitle {
+        font-size: 1.1rem;
+        color: #8b949e;
+        margin-bottom: 2.0rem;
+        font-weight: 400;
+        letter-spacing: 0.5px;
     }
 
-    /* Glassmorphism Kartlar */
+    /* Glass cards */
     .glass-card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: transform 0.3s ease;
+        background: rgba(22, 27, 34, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(240, 246, 252, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        height: 100%;
     }
     .glass-card:hover {
-        transform: translateY(-5px);
-        border-color: #00d2ff;
+        transform: translateY(-3px);
+        border-color: rgba(63, 185, 80, 0.25);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        background: rgba(22, 27, 34, 0.82);
     }
 
-    /* Model Kartları Renklendirme */
+    /* Metric card */
+    .metric-card {
+        background: rgba(22, 27, 34, 0.6);
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid rgba(240, 246, 252, 0.05);
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        background: rgba(22, 27, 34, 0.8);
+        border-color: #58a6ff;
+        transform: scale(1.02);
+    }
+
+    /* Model cards */
     .model-card-positive {
-        border-left: 5px solid #00ff88;
+        border-top: 4px solid #3fb950;
+        background: linear-gradient(180deg, rgba(63, 185, 80, 0.08) 0%, rgba(22, 27, 34, 0.1) 100%);
     }
     .model-card-negative {
-        border-left: 5px solid #ff0055;
+        border-top: 4px solid #f85149;
+        background: linear-gradient(180deg, rgba(248, 81, 73, 0.08) 0%, rgba(22, 27, 34, 0.1) 100%);
     }
 
-    /* Butonlar */
-    .stButton>button {
-        background: linear-gradient(45deg, #00d2ff, #3a7bd5);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: bold;
-        transition: all 0.3s;
+    /* Text area */
+    .stTextArea textarea {
+        background-color: rgba(1, 4, 9, 0.6) !important;
+        border: 1px solid #30363d !important;
+        color: #ffffff !important;
+        border-radius: 12px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        font-size: 1rem;
     }
-    .stButton>button:hover {
-        box-shadow: 0 0 15px #00d2ff;
+    .stTextArea textarea:focus {
+        border-color: #58a6ff !important;
+        box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+    }
+
+    /* Buttons (force solid) */
+    div.stButton > button,
+    div.stButton > button[kind],
+    button[kind="primary"],
+    button[kind="secondary"],
+    button[kind="tertiary"] {
+        opacity: 1 !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.4px !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 1.2rem !important;
+        width: 100% !important;
+        text-transform: none !important;
+    }
+    div.stButton > button[kind="primary"], button[kind="primary"] {
+        background: linear-gradient(180deg, #2ea043 0%, #238636 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(240, 246, 252, 0.18) !important;
+        box-shadow: 0 8px 20px rgba(46, 160, 67, 0.28) !important;
+    }
+    div.stButton > button[kind="secondary"], button[kind="secondary"] {
+        background: rgba(56, 139, 253, 0.12) !important;
+        color: #c9d1d9 !important;
+        border: 1px solid rgba(56, 139, 253, 0.35) !important;
+        box-shadow: none !important;
+    }
+    div.stButton > button:hover,
+    div.stButton > button[kind]:hover,
+    button[kind="primary"]:hover,
+    button[kind="secondary"]:hover {
+        opacity: 1 !important;
+        filter: none !important;
+        transform: translateY(-1px) !important;
+    }
+    div.stButton > button:disabled, button:disabled {
+        opacity: 0.55 !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 20px;
+        background-color: transparent;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #21262d;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        border: none;
+        color: #8b949e;
+        padding: 10px 0px;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: color 0.2s;
+    }
+    .stTabs [data-baseweb="tab"]:hover { color: #c9d1d9; }
+    .stTabs [aria-selected="true"] { background-color: transparent !important; color: #58a6ff !important; }
+
+    /* DataFrame */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    /* Unified section header for dashboard */
+    .section-header{
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #c9d1d9;
+        letter-spacing: -0.2px;
+        margin: 0 0 12px 0;
+    }
+
+    /* =========================
+       DATA LAB SAMPLE CARDS
+       ========================= */
+    .lab-card {
+        height: 460px;
+        padding: 18px !important;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .lab-textbox {
+        flex: 1;
+        background: rgba(1, 4, 9, 0.45);
+        border: 1px solid rgba(240, 246, 252, 0.08);
+        border-radius: 12px;
+        padding: 12px 12px;
+        overflow-y: auto;
+        line-height: 1.65;
+        color: #c9d1d9;
+        font-size: 0.95rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .lab-meta {
+        font-size: 0.75rem;
+        color: #8b949e;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+    .lab-preds {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .pred-chip {
+        background: rgba(22, 27, 34, 0.65);
+        border: 1px solid rgba(240, 246, 252, 0.08);
+        border-radius: 12px;
+        padding: 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.85rem;
+    }
+    .pred-left {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: #c9d1d9;
+    }
+    .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+    }
+    .pred-right {
+        font-size: 0.8rem;
+        letter-spacing: 0.6px;
+        opacity: 0.95;
     }
     </style>
     """,
@@ -169,400 +376,348 @@ st.markdown(
 )
 
 # =====================================================================
-# HEADER
+# HEADER SECTION
 # =====================================================================
+col_brand, col_title = st.columns([1, 6])
+with col_brand:
+    try:
+        st.image("assets/ytu_logo.png", width=120)
+    except Exception:
+        st.markdown("<h1 style='font-size:4rem; color:#58a6ff;'>S</h1>", unsafe_allow_html=True)
 
-col_h1, col_h2 = st.columns([1, 6])
-with col_h1:
-    st.image("assets/ytu_logo.png", width=90)
-with col_h2:
-    st.title("Türkiye Üniversiteleri Duygu Analiz Platformu")
-    st.markdown(
-        "BERTurk ve derin öğrenme tabanlı çoklu model ile tweet duygu analizi"
-    )
-
-st.markdown("---")
-
-# =====================================================================
-# TABS
-# =====================================================================
-
-tab1, tab2, tab3 = st.tabs(
-    ["🚀 CANLI ARENA (Multi-Model)", "📊 DASHBOARD & İSTATİSTİK", "📂 VERİ LABORATUVARI"]
-)
+with col_title:
+    st.markdown('<h1 class="main-title">SentimentAI Arena</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Next-Gen Sentiment Analysis for University Feedback</p>', unsafe_allow_html=True)
 
 # =====================================================================
-# TAB 1: CANLI ARENA
+# MAIN TABS
 # =====================================================================
-with tab1:
-    st.markdown(
-        "<div class='glass-card'><h3>🧠 Anlık Analiz Modülü</h3>"
-        "<p>Metni girin, 4 farklı yapay zeka modeli aynı anda analiz etsin.</p></div>",
-        unsafe_allow_html=True,
-    )
+tab_live, tab_dashboard, tab_lab = st.tabs(["CANLI ANALİZ", "DASHBOARD", "DATA LAB"])
 
-    txt_input = st.text_area(
-        "Analiz edilecek yorumu giriniz:",
-        height=100,
-        placeholder="Örn: İTÜ çok güzel, kampüsü harika ama ulaşım biraz zor...",
-    )
+# =====================================================================
+# TAB 1: CANLI ANALİZ
+# =====================================================================
+with tab_live:
+    st.write("")
+    col_input, col_results = st.columns([1, 1], gap="large")
 
-    if st.button("ANALİZİ BAŞLAT", type="primary", use_container_width=True):
-        if txt_input.strip():
-            try:
-                with st.spinner("Modeller çalışıyor..."):
-                    results = get_multi_model_prediction(txt_input)
-                st.session_state["last_input"] = txt_input
-                st.session_state["last_results"] = results
-            except Exception as e:
-                st.error(f"Model tahmini sırasında hata oluştu: {e}")
-        else:
-            st.warning("Lütfen analiz edilecek bir metin giriniz.")
-
-    # Eğer daha önce analiz yapılmışsa sonuçları göster
-    if st.session_state["last_results"] is not None:
-        results = st.session_state["last_results"]
-
-        st.markdown("### 🧬 Model Sonuçları")
-        cols = st.columns(4)
-
-        for i, model_name in enumerate(["BERTurk", "CNN-BiLSTM", "BiLSTM", "CNN"]):
-            data = results.get(model_name, None)
-
-            with cols[i]:
-                if data is None:
-                    st.markdown(
-                        f"""
-                        <div class='glass-card model-card-negative' style='text-align:center; opacity:0.7;'>
-                            <h4 style='color:#ccc'>{model_name}</h4>
-                            <h2 style='color:#ffcc00'>⚠ Kullanılamıyor</h2>
-                            <p>Bu model için tahmin üretilemedi.</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                    continue
-
-                pred, conf = data  # conf'u hesaplıyoruz ama UI'da göstermiyoruz
-                sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
-                color = "#00ff88" if pred == 1 else "#ff0055"
-                icon = "😊" if pred == 1 else "😡"
-
-                st.markdown(
-                    f"""
-                    <div class='glass-card model-card-{'positive' if pred == 1 else 'negative'}' style='text-align:center;'>
-                        <h4 style='color:#ccc'>{model_name}</h4>
-                        <h2 style='color:{color}'>{icon} {sentiment}</h2>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        # === AKTİF ÖĞRENME MODÜLÜ ===
-        st.markdown("---")
+    with col_input:
         st.markdown(
-            "<div class='glass-card'><h3>📚 Aktif Öğrenme Modülü</h3>"
-            "<p>Son analiz edilen cümleyi <b>text / tags</b> formatında Excel havuzuna kaydedebilirsin. "
-            "<code>text</code> kolonunda metin, <code>tags</code> kolonunda ise "
-            "pozitif için 1, negatif için 0 tutulur.</p></div>",
+            """
+            <div class="glass-card">
+                <h3 style="margin-top:0; color:#c9d1d9;">Yorum Analizi</h3>
+                <p style="color:#8b949e; font-size:0.95rem; margin-bottom:18px;">
+                    Aşağıya bir metin girin ve 4 farklı modelin (BERTurk, CNN-BiLSTM, BiLSTM, CNN) anlık duygu analizini izleyin.
+                </p>
+            """,
             unsafe_allow_html=True,
         )
 
-        col_al1, col_al2 = st.columns([3, 1])
+        txt_input = st.text_area(
+            "Metin Girişi",
+            height=140,
+            placeholder="Örn: Kampüs hayatı harika ama yemekhane sırası çok uzun...",
+            label_visibility="collapsed",
+        )
 
-        with col_al1:
-            st.markdown("**text**")
-            text_for_label = st.text_area(
-                "",
-                value=st.session_state["last_input"],
-                height=100,
-                placeholder="Son analiz edilen metin burada görünecek...",
-            )
+        # Clean button placement fixed (1:1)
+        c_btn1, c_btn2 = st.columns([1, 1], gap="small")
+        with c_btn1:
+            analyze_btn = st.button("ANALİZİ BAŞLAT", type="primary")
+        with c_btn2:
+            clean_btn = st.button("Temizle", type="secondary")
 
-        with col_al2:
-            st.markdown("**tags**")
-            tag_choice = st.radio(
-                "",
-                ["Pozitif (1)", "Negatif (0)"],
-                index=0,
-                key="active_tag_radio",
-            )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            if st.button("Excel'e kaydet"):
-                if not text_for_label.strip():
-                    st.warning("Kaydetmeden önce bir metin olmalı.")
-                else:
-                    tag_value = 1 if "Pozitif" in tag_choice else 0
-                    # Session içi havuza ekle
-                    st.session_state["active_pool"].append(
-                        {"text": text_for_label, "tags": tag_value}
-                    )
-                    # Excel'e yaz / append et
+        if clean_btn:
+            st.session_state["last_input"] = ""
+            st.session_state["last_results"] = None
+            st.rerun()
+
+        if analyze_btn:
+            if txt_input.strip():
+                with st.spinner("Modeller çalışıyor..."):
+                    time.sleep(0.35)
                     try:
-                        try:
-                            existing = pd.read_excel("active_learning_pool.xlsx")
-                        except FileNotFoundError:
-                            existing = pd.DataFrame(columns=["text", "tags"])
-
-                        new_row = pd.DataFrame(
-                            [{"text": text_for_label, "tags": tag_value}]
-                        )
-                        out_df = pd.concat([existing, new_row], ignore_index=True)
-                        out_df.to_excel("active_learning_pool.xlsx", index=False)
-                        st.success("Örnek active_learning_pool.xlsx dosyasına kaydedildi ✅")
+                        results = get_multi_model_prediction(txt_input)
+                        st.session_state["last_input"] = txt_input
+                        st.session_state["last_results"] = results
                     except Exception as e:
-                        st.error(f"Excel kaydı sırasında hata oluştu: {e}")
+                        st.error(f"Tahmin Hatası: {e}")
+            else:
+                st.warning("Lütfen bir metin giriniz.")
 
-        if st.session_state["active_pool"]:
-            al_df = pd.DataFrame(st.session_state["active_pool"])
-            st.markdown("#### 🎯 Etiket Havuzu (Session içindeki son kayıtlar)")
-            st.dataframe(al_df.tail(10), use_container_width=True)
+        # Active Learning
+        if st.session_state["last_results"]:
+            st.write("")
+            st.markdown(
+                """
+                <div class="glass-card" style="border:1px dashed rgba(48,54,61,0.55);">
+                    <h4 style="margin-top:0;">Veri Havuzu</h4>
+                    <p style="color:#8b949e; font-size:0.85rem; margin-bottom:10px;">
+                        Modelin yanıldığı durumları düzeltip havuza ekleyerek gelecekteki eğitimlere katkıda bulunun.
+                    </p>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            csv_bytes = al_df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "Session etiket havuzunu CSV olarak indir",
-                data=csv_bytes,
-                file_name="active_learning_pool_session.csv",
-                mime="text/csv",
+            c1, c2 = st.columns([2, 1], gap="medium")
+            with c1:
+                st.caption("Son Analiz Edilen Metin:")
+                preview = st.session_state["last_input"] or ""
+                st.code(f"{preview[:220]}{'...' if len(preview) > 220 else ''}", language="text")
+            with c2:
+                st.caption("Doğru Etiket:")
+                tag_choice = st.selectbox("Etiket Seç", ["Pozitif (1)", "Negatif (0)"], label_visibility="collapsed")
+
+            if st.button("Veri Setine Ekle (+)", type="secondary"):
+                tag_value = 1 if "Pozitif" in tag_choice else 0
+                st.session_state["active_pool"].append({"text": st.session_state["last_input"], "tags": tag_value})
+
+                try:
+                    try:
+                        existing = pd.read_excel("active_learning_pool.xlsx")
+                    except Exception:
+                        existing = pd.DataFrame(columns=["text", "tags"])
+
+                    new_row = pd.DataFrame([{"text": st.session_state["last_input"], "tags": tag_value}])
+                    pd.concat([existing, new_row], ignore_index=True).to_excel("active_learning_pool.xlsx", index=False)
+                    st.toast("Veri başarıyla kaydedildi.", icon="✅")
+                except Exception as e:
+                    st.error(f"Kayıt Hatası: {e}")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with col_results:
+        st.markdown("### Sonuçlar")
+
+        if st.session_state["last_results"]:
+            results = st.session_state["last_results"]
+            c_res1, c_res2 = st.columns(2, gap="large")
+            models_list = ["BERTurk", "CNN-BiLSTM", "BiLSTM", "CNN"]
+
+            for i, model_name in enumerate(models_list):
+                data = results.get(model_name)
+                target_col = c_res1 if i % 2 == 0 else c_res2
+
+                with target_col:
+                    if data is None:
+                        st.error(f"{model_name} N/A")
+                    else:
+                        pred, _ = data
+                        sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
+                        card_class = "model-card-positive" if pred == 1 else "model-card-negative"
+                        emoji = "😊" if pred == 1 else "😡"
+                        text_color = "#3fb950" if pred == 1 else "#f85149"
+
+                        st.markdown(
+                            f"""
+                            <div class="glass-card {card_class}" style="text-align:center; margin-bottom:20px; padding:20px; min-height:160px; display:flex; flex-direction:column; justify-content:center;">
+                                <h5 style="color:#8b949e; margin:0; font-weight:700; text-transform:uppercase; letter-spacing:1px; font-size:0.8rem;">{model_name}</h5>
+                                <div style="font-size:3rem; margin:10px 0;">{emoji}</div>
+                                <h3 style="color:{text_color}; margin:0; letter-spacing:0.5px;">{sentiment}</h3>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+        else:
+            st.markdown(
+                """
+                <div class="glass-card" style="text-align:center; padding:60px 40px; border: 2px dashed #30363d; opacity:0.7; background:transparent;">
+                    <div style="font-size:4rem; margin-bottom:20px; opacity:0.5; filter: grayscale(100%);">📡</div>
+                    <h3 style="color:#8b949e;">Bekleniyor...</h3>
+                    <p>Analiz sonuçları burada görüntülenecek.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
 # =====================================================================
-# TAB 2: DASHBOARD & İSTATİSTİK
+# TAB 2: DASHBOARD
 # =====================================================================
-with tab2:
-    total_tweets = len(DATA_DF) if DATA_DF is not None else 0
+with tab_dashboard:
+    st.write("")
 
+    total_tweets = len(DATA_DF) if DATA_DF is not None else 0
     if DATA_DF is not None and "tags" in DATA_DF.columns:
         pos_count = int((DATA_DF["tags"] == 1).sum())
         neg_count = int((DATA_DF["tags"] == 0).sum())
-        total_labeled = pos_count + neg_count if (pos_count + neg_count) > 0 else 1
-        pos_ratio = pos_count / total_labeled
-        neg_ratio = neg_count / total_labeled
     else:
         pos_count, neg_count = 1374, 3669
-        total_labeled = pos_count + neg_count
-        pos_ratio = pos_count / total_labeled
-        neg_ratio = neg_count / total_labeled
 
-    avg_macro_f1 = (
-        sum(m["Macro F1"] for m in MODEL_METRICS.values()) / len(MODEL_METRICS)
-    )
+    total_labeled = pos_count + neg_count if (pos_count + neg_count) > 0 else 1
+    pos_percent = (pos_count / total_labeled) * 100
+    neg_percent = (neg_count / total_labeled) * 100
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Toplam Veri", f"{total_tweets:,}".replace(",", "."))
-    m2.metric(
-        "Toplam Memnuniyet (Pozitif / Negatif)",
-        f"%{pos_ratio * 100:.1f} / %{neg_ratio * 100:.1f}",
-    )
-    m3.metric("Ortalama Macro F1", f"%{avg_macro_f1 * 100:.1f}")
+    m1, m2, m3, m4 = st.columns(4, gap="medium")
+
+    def render_metric_card(label, value, col):
+        with col:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div style="color:#8b949e; font-size:0.9rem; margin-bottom:5px;">{label}</div>
+                    <div style="color:#ffffff; font-size:2rem; font-weight:800; text-shadow:0 0 10px rgba(88,166,255,0.2);">{value}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    render_metric_card("Toplam Yorum", f"{total_tweets:,}", m1)
+    render_metric_card("Pozitif", f"{pos_count:,}", m2)
+    render_metric_card("Negatif", f"{neg_count:,}", m3)
+    render_metric_card("Pozitif / Negatif", f"%{pos_percent:.1f} / %{neg_percent:.1f}", m4)
 
     st.markdown("---")
 
-    col_g1, col_g2 = st.columns(2)
+    metrics_df = pd.DataFrame(MODEL_METRICS).T.reset_index().rename(columns={"index": "Model"})
 
-    # --- Model Liderlik Tablosu ---
-    with col_g1:
-        st.markdown(
-            "<div class='glass-card'><h4>🏆 Model Liderlik Tablosu</h4></div>",
-            unsafe_allow_html=True,
-        )
+    col_main_chart, col_pie = st.columns([2, 1], gap="large")
 
-        metrics_df = pd.DataFrame(MODEL_METRICS).T.reset_index()
-        metrics_df = metrics_df.rename(columns={"index": "Model"})
+    with col_main_chart:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Model Başarı Sıralaması (Macro F1)</div>', unsafe_allow_html=True)
 
         fig_bar = px.bar(
             metrics_df,
             x="Model",
             y="Macro F1",
             text=metrics_df["Macro F1"].apply(lambda x: f"%{x*100:.1f}"),
+            color="Macro F1",
+            color_continuous_scale=["#1a7f37", "#3fb950"],
+            height=320,
         )
         fig_bar.update_layout(
-            yaxis_range=[0, 1],
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
+            font=dict(color="#c9d1d9"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", range=[0, 1.05]),
+            xaxis=dict(showgrid=False),
+            coloraxis_showscale=False,
+            margin=dict(t=10, l=0, r=0, b=0),
         )
-        fig_bar.update_traces(textposition="outside")
         st.plotly_chart(fig_bar, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.caption("Not: Değerler test seti sonuçlarından (Macro F1) alınmıştır.")
+    with col_pie:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Üniversite Bazlı Dağılım</div>', unsafe_allow_html=True)
 
-        # Özet tablo
-        st.markdown("#### 📊 Model Bazlı Özet Performans Tablosu")
-        perf_table = metrics_df[
-            ["Model", "Accuracy", "Macro F1", "Precision", "Recall", "Support"]
-        ].copy()
+        if DATA_DF is not None and {"tags", "university"}.issubset(DATA_DF.columns):
+            uni_list = sorted(DATA_DF["university"].dropna().unique().tolist())
+            selected_uni = st.selectbox("Üniversite Filtrele", ["Tümü"] + uni_list)
+
+            subset = DATA_DF if selected_uni == "Tümü" else DATA_DF[DATA_DF["university"] == selected_uni]
+
+            if len(subset) > 0:
+                p = int((subset["tags"] == 1).sum())
+                n = int((subset["tags"] == 0).sum())
+                fig_pie = go.Figure(
+                    data=[
+                        go.Pie(
+                            labels=["Pozitif", "Negatif"],
+                            values=[p, n],
+                            hole=0.6,
+                            marker=dict(colors=["#3fb950", "#f85149"], line=dict(color="#0d1117", width=2)),
+                        )
+                    ]
+                )
+                fig_pie.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#c9d1d9"),
+                    margin=dict(t=0, b=0, l=0, r=0),
+                    height=220,
+                    showlegend=True,
+                    legend=dict(orientation="h", x=0.15, y=-0.1),
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Veri yok.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    st.write("")
+    col_tbl1, col_tbl2 = st.columns(2, gap="large")
+
+    with col_tbl1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Model Performans Özeti</div>', unsafe_allow_html=True)
+
+        perf_table = metrics_df[["Model", "Accuracy", "Macro F1", "Precision", "Recall"]].copy()
         st.dataframe(
-            perf_table.style.format(
-                {
-                    "Accuracy": "{:.3f}",
-                    "Macro F1": "{:.3f}",
-                    "Precision": "{:.3f}",
-                    "Recall": "{:.3f}",
-                    "Support": "{:.0f}",
-                }
-            ),
+            perf_table.style.format("{:.3f}", subset=["Accuracy", "Macro F1", "Precision", "Recall"])
+            .background_gradient(cmap="Greens", subset=["Accuracy"], vmin=0.75, vmax=0.95)
+            .background_gradient(cmap="Greens", subset=["Macro F1"], vmin=0.70, vmax=0.92)
+            .background_gradient(cmap="Greens", subset=["Precision"], vmin=0.75, vmax=0.92)
+            .background_gradient(cmap="Greens", subset=["Recall"], vmin=0.70, vmax=0.92),
             use_container_width=True,
+            hide_index=True,
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Detaylı sınıf bazlı tablo
-        st.markdown("#### 🔬 Detaylı (Olumlu / Olumsuz) Sınıf Metrikleri")
+    with col_tbl2:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Detaylı Sınıf Analizi</div>', unsafe_allow_html=True)
+
         rows = []
         for model_name, class_dict in MODEL_CLASS_METRICS.items():
             for cls_name, vals in class_dict.items():
                 rows.append(
-                    {
-                        "Model": model_name,
-                        "Sınıf": cls_name,
-                        "Precision": vals["precision"],
-                        "Recall": vals["recall"],
-                        "F1": vals["f1"],
-                        "Support": vals["support"],
-                    }
+                    {"Model": model_name, "Sınıf": cls_name, "Precision": vals["precision"], "Recall": vals["recall"], "F1": vals["f1"]}
                 )
         class_df = pd.DataFrame(rows)
+
         st.dataframe(
-            class_df.style.format(
-                {
-                    "Precision": "{:.3f}",
-                    "Recall": "{:.3f}",
-                    "F1": "{:.3f}",
-                    "Support": "{:.0f}",
-                }
-            ),
+            class_df.style.format("{:.3f}", subset=["Precision", "Recall", "F1"]),
             use_container_width=True,
+            hide_index=True,
+            height=300,
         )
-
-    # --- Üniversite bazlı memnuniyet dağılımı ---
-    with col_g2:
-        st.markdown(
-            "<div class='glass-card'><h4>🎓 Üniversite Bazlı Memnuniyet Dağılımı</h4></div>",
-            unsafe_allow_html=True,
-        )
-
-        if DATA_DF is not None and {"tags", "university"}.issubset(DATA_DF.columns):
-            uni_list = (
-                sorted(DATA_DF["university"].dropna().unique().tolist())
-                if len(DATA_DF) > 0
-                else []
-            )
-            selected_uni = st.selectbox(
-                "Üniversite seçiniz:",
-                ["Tüm Üniversiteler"] + uni_list,
-            )
-
-            if selected_uni == "Tüm Üniversiteler":
-                subset = DATA_DF
-            else:
-                subset = DATA_DF[DATA_DF["university"] == selected_uni]
-
-            if subset is not None and len(subset) > 0:
-                pos_u = int((subset["tags"] == 1).sum())
-                neg_u = int((subset["tags"] == 0).sum())
-                values = [pos_u, neg_u]
-            else:
-                values = [0, 0]
-
-            labels = ["Pozitif", "Negatif"]
-            fig_pie_uni = go.Figure(
-                data=[
-                    go.Pie(
-                        labels=labels,
-                        values=values,
-                        hole=0.6,
-                        marker_colors=["#00ff88", "#ff0055"],
-                    )
-                ]
-            )
-            fig_pie_uni.update_layout(
-                title=f"{selected_uni} Memnuniyet Dağılımı",
-                paper_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="white"),
-            )
-            st.plotly_chart(fig_pie_uni, use_container_width=True)
-        else:
-            st.info("Üniversite ve tags kolonları bulunamadı, grafik gösterilemiyor.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================================================================
-# TAB 3: VERİ LABORATUVARI
+# TAB 3: DATA LAB
 # =====================================================================
-with tab3:
-    st.markdown("### 📂 Toplu Veri Yükle & Test Et")
-    uploaded_file = st.file_uploader(
-        "Excel/CSV Dosyasını Sürükle", type=["xlsx", "csv"]
+with tab_lab:
+    st.write("")
+    st.markdown(
+        """
+        <div class="glass-card">
+            <h3 style="margin-top:0;">Toplu Test & Veri Laboratuvarı</h3>
+            <p>Excel (.xlsx) veya CSV yükleyip toplu analiz yapabilir, rastgele örneklerle modelleri hızlıca test edebilirsiniz.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+    st.write("")
+
+    uploaded_file = st.file_uploader("Dosya Yükle (Sürükle-Bırak)", type=["xlsx", "csv"])
 
     if uploaded_file:
-        df = (
-            pd.read_excel(uploaded_file)
-            if uploaded_file.name.endswith("xlsx")
-            else pd.read_csv(uploaded_file)
-        )
-        st.dataframe(df.head(), use_container_width=True)
+        df_up = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
 
-        if st.button("Rastgele 3 örnek çek ve analiz et"):
-            samples = df.sample(3)
+        with st.expander("📂 Yüklenen Dosya İçeriği", expanded=True):
+            st.dataframe(df_up.head(10), use_container_width=True)
 
+        st.write("")
+        if st.button("Rastgele 3 Örnek Analiz Et", type="primary"):
             text_col = next(
-                (col for col in df.columns if "text" in col.lower() or "tweet" in col.lower()),
+                (c for c in df_up.columns if "text" in c.lower() or "tweet" in c.lower() or "yorum" in c.lower()),
                 None,
-            )
-            uni_col = next(
-                (col for col in df.columns if "uni" in col.lower()), None
             )
 
             if not text_col:
-                st.error(
-                    "Metin sütunu bulunamadı. Lütfen 'text' veya 'tweet' içeren bir sütun adı kullanın."
-                )
+                st.error("Hata: Dosyada 'text', 'tweet' veya 'yorum' sütunu bulunamadı.")
             else:
-                for _, row in samples.iterrows():
-                    txt = str(row[text_col])
-                    uni = (
-                        str(row[uni_col])
-                        if (uni_col and pd.notna(row[uni_col]))
-                        else "Genel"
-                    )
+                samples = df_up.sample(3)
+                cols_lab = st.columns(3, gap="large")
 
+                for idx, (_, row) in enumerate(samples.iterrows()):
+                    raw_txt = "" if pd.isna(row[text_col]) else str(row[text_col])
                     try:
-                        res = get_multi_model_prediction(txt, university=uni)
+                        res = get_multi_model_prediction(raw_txt)
+                        with cols_lab[idx]:
+                            render_lab_card(raw_txt, res)
                     except Exception as e:
-                        st.error(f"Bu örnek için model tahmini yapılamadı: {e}")
-                        continue
-                    bert_pred = res.get("BERTurk", (0, 0.0))[0]
-
-                    color = "#00ff88" if bert_pred == 1 else "#ff0055"
-                    border = f"4px solid {color}"
-
-                    def label_for(model_name: str) -> str:
-                        data = res.get(model_name, None)
-                        if data is None:
-                            return "ÇALIŞMIYOR"
-                        pred, _ = data
-                        return "POZİTİF" if pred == 1 else "NEGATİF"
-
-                    st.markdown(
-                        f"""
-                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-top: 10px; border-left: {border};">
-                            <small style="color: #888;">{uni}</small>
-                            <p style="font-size: 1.1em; color: white;">"{txt}"</p>
-                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                <span style="background:{color}; color:black; padding:2px 8px; border-radius:4px; font-weight:bold;">
-                                    BERTurk: {label_for('BERTurk')}
-                                </span>
-                                <span style="background:#222; color:#ccc; padding:2px 8px; border-radius:4px;">
-                                    CNN-BiLSTM: {label_for('CNN-BiLSTM')}
-                                </span>
-                                <span style="background:#222; color:#ccc; padding:2px 8px; border-radius:4px;">
-                                    BiLSTM: {label_for('BiLSTM')}
-                                </span>
-                                <span style="background:#222; color:#ccc; padding:2px 8px; border-radius:4px;">
-                                    CNN: {label_for('CNN')}
-                                </span>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-    else:
-        st.info("Analiz için bir Excel/CSV dosyası yükleyebilirsin.")
+                        with cols_lab[idx]:
+                            st.error(f"Hata: {str(e)[:160]}")

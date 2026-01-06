@@ -2,9 +2,11 @@
 __pycache__/
 *.pyc
 venv/
+.venv/
 .DS_Store
 .streamlit/
 # Ignore large model files
 models/
+old_models.zip
 # Ignore personal/sensitive data if any (optional, but good practice)
 # data/ 
