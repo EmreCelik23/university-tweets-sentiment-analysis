@@ -386,8 +386,8 @@ with col_brand:
         st.markdown("<h1 style='font-size:4rem; color:#58a6ff;'>S</h1>", unsafe_allow_html=True)
 
 with col_title:
-    st.markdown('<h1 class="main-title">SentimentAI Arena</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Next-Gen Sentiment Analysis for University Feedback</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">Turkish Universities Sentiment Model</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Üniversite yorumları için duygu analizi platformu</p>', unsafe_allow_html=True)
 
 # =====================================================================
 # MAIN TABS
@@ -420,12 +420,12 @@ with tab_live:
             label_visibility="collapsed",
         )
 
-        # Clean button placement fixed (1:1)
-        c_btn1, c_btn2 = st.columns([1, 1], gap="small")
+        # Buttons side by side
+        c_btn1, c_btn2 = st.columns([2.5, 1], gap="small")
         with c_btn1:
-            analyze_btn = st.button("ANALİZİ BAŞLAT", type="primary")
+            analyze_btn = st.button("ANALİZİ BAŞLAT", type="primary", use_container_width=True)
         with c_btn2:
-            clean_btn = st.button("Temizle", type="secondary")
+            clean_btn = st.button("Temizle", type="secondary", use_container_width=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -575,8 +575,13 @@ with tab_dashboard:
     col_main_chart, col_pie = st.columns([2, 1], gap="large")
 
     with col_main_chart:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Model Başarı Sıralaması (Macro F1)</div>', unsafe_allow_html=True)
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Başarı Sıralaması (Macro F1)</h4>
+            ''',
+            unsafe_allow_html=True
+        )
 
         fig_bar = px.bar(
             metrics_df,
@@ -600,8 +605,13 @@ with tab_dashboard:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_pie:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Üniversite Bazlı Dağılım</div>', unsafe_allow_html=True)
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Üniversite Bazlı Dağılım</h4>
+            ''',
+            unsafe_allow_html=True
+        )
 
         if DATA_DF is not None and {"tags", "university"}.issubset(DATA_DF.columns):
             uni_list = sorted(DATA_DF["university"].dropna().unique().tolist())
@@ -640,8 +650,13 @@ with tab_dashboard:
     col_tbl1, col_tbl2 = st.columns(2, gap="large")
 
     with col_tbl1:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Model Performans Özeti</div>', unsafe_allow_html=True)
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Performans Özeti</h4>
+            ''',
+            unsafe_allow_html=True
+        )
 
         perf_table = metrics_df[["Model", "Accuracy", "Macro F1", "Precision", "Recall"]].copy()
         st.dataframe(
@@ -656,8 +671,13 @@ with tab_dashboard:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_tbl2:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Detaylı Sınıf Analizi</div>', unsafe_allow_html=True)
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Detaylı Sınıf Analizi</h4>
+            ''',
+            unsafe_allow_html=True
+        )
 
         rows = []
         for model_name, class_dict in MODEL_CLASS_METRICS.items():
