@@ -320,7 +320,12 @@ def _predict_with_bert(text: str, university: str) -> Tuple[int, float]:
     model = m["model"]
 
     clean_txt = clean_text_minimal(text)
-    inp = f"Üniversite: {university} || {clean_txt}"
+    
+    # Eğer üniversite boş veya "Genel" ise, sadece text gönder
+    if not university or university.strip().lower() in ["", "genel"]:
+        inp = clean_txt
+    else:
+        inp = f"Üniversite: {university} || {clean_txt}"
 
     enc = tok(
         inp,

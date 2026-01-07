@@ -113,6 +113,103 @@ def render_lab_card(text: str, res: dict):
 
 
 # =====================================================================
+# DATA PROCESSING HELPERS FOR VISUALIZATIONS
+# =====================================================================
+def extract_year(date_str):
+    """Extract year from Twitter createdAt format."""
+    try:
+        # Format: "Tue Nov 04 12:45:47 +0000 2025"
+        return int(str(date_str).split()[-1])
+    except Exception:
+        return None
+
+
+def min_max_normalize(series):
+    """Normalize a pandas Series to 0-1 range using Min-Max normalization."""
+    min_val = series.min()
+    max_val = series.max()
+    if max_val == min_val:
+        return pd.Series([0.5] * len(series), index=series.index)
+    return (series - min_val) / (max_val - min_val)
+
+
+@st.cache_data
+def prepare_hype_data(df):
+    """Prepare normalized tweet count data by university and year."""
+    if df is None or 'createdAt' not in df.columns or 'university' not in df.columns:
+        return None
+    
+    # Extract years
+    df_copy = df.copy()
+    df_copy['year'] = df_copy['createdAt'].apply(extract_year)
+    df_copy = df_copy.dropna(subset=['year'])
+    df_copy['year'] = df_copy['year'].astype(int)
+    
+    # Count tweets by university and year
+    hype_df = df_copy.groupby(['university', 'year']).size().reset_index(name='tweet_count')
+    
+    # Apply rolling mean for smoother trends (especially for universities with sparse data)
+    # Increased to 3-period moving average for even smoother curves
+    hype_df['smoothed_count'] = hype_df.groupby('university')['tweet_count'].transform(
+        lambda x: x.rolling(window=3, min_periods=1, center=True).mean()
+    )
+    
+    # Normalize smoothed counts per university (Min-Max)
+    hype_df['normalized_count'] = hype_df.groupby('university')['smoothed_count'].transform(min_max_normalize)
+    
+    # Add total tweet count for each university (for highlighting top universities)
+    total_tweets = df_copy.groupby('university').size().reset_index(name='total_tweets')
+    hype_df = hype_df.merge(total_tweets, on='university', how='left')
+    
+    return hype_df
+
+
+@st.cache_data
+def prepare_sentiment_trend_data(df):
+    """Prepare sentiment trend data by university and year."""
+    if df is None or 'createdAt' not in df.columns or 'university' not in df.columns or 'tags' not in df.columns:
+        return None, None
+    
+    # Extract years
+    df_copy = df.copy()
+    df_copy['year'] = df_copy['createdAt'].apply(extract_year)
+    df_copy = df_copy.dropna(subset=['year'])
+    df_copy['year'] = df_copy['year'].astype(int)
+    
+    # Calculate average sentiment by university and year
+    sentiment_df = df_copy.groupby(['university', 'year'])['tags'].mean().reset_index(name='avg_sentiment')
+    sentiment_df['avg_sentiment_pct'] = sentiment_df['avg_sentiment'] * 100
+    
+    # Calculate Turkey average (overall)
+    turkey_avg = df_copy.groupby('year')['tags'].mean().reset_index(name='avg_sentiment')
+    turkey_avg['avg_sentiment_pct'] = turkey_avg['avg_sentiment'] * 100
+    
+    return sentiment_df, turkey_avg
+
+
+@st.cache_data
+def prepare_heatmap_data(df):
+    """Prepare heatmap data for university sentiment by year."""
+    if df is None or 'createdAt' not in df.columns or 'university' not in df.columns or 'tags' not in df.columns:
+        return None
+    
+    # Extract years
+    df_copy = df.copy()
+    df_copy['year'] = df_copy['createdAt'].apply(extract_year)
+    df_copy = df_copy.dropna(subset=['year'])
+    df_copy['year'] = df_copy['year'].astype(int)
+    
+    # Calculate average sentiment by university and year
+    heatmap_df = df_copy.groupby(['university', 'year'])['tags'].mean().reset_index(name='avg_sentiment')
+    heatmap_df['avg_sentiment_pct'] = heatmap_df['avg_sentiment'] * 100
+    
+    # Pivot to create heatmap structure
+    pivot_df = heatmap_df.pivot(index='university', columns='year', values='avg_sentiment_pct')
+    
+    return pivot_df
+
+
+# =====================================================================
 # PREMIUM CSS STYLING
 # =====================================================================
 st.markdown(
@@ -579,6 +676,7 @@ with tab_dashboard:
             '''
             <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Başarı Sıralaması (Macro F1)</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Dört farklı modelin genel performans karşılaştırması - yüksek F1 skoru daha dengeli tahmin anlamına gelir.</p>
             ''',
             unsafe_allow_html=True
         )
@@ -609,6 +707,7 @@ with tab_dashboard:
             '''
             <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Üniversite Bazlı Dağılım</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Seçilen üniversitenin pozitif ve negatif yorum oranlarını görselleştirin.</p>
             ''',
             unsafe_allow_html=True
         )
@@ -654,6 +753,7 @@ with tab_dashboard:
             '''
             <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Performans Özeti</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Accuracy, F1, Precision ve Recall metriklerinin detaylı karşılaştırması.</p>
             ''',
             unsafe_allow_html=True
         )
@@ -675,6 +775,7 @@ with tab_dashboard:
             '''
             <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Detaylı Sınıf Analizi</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Her modelin pozitif ve negatif sınıflardaki performansı ayrı ayrı incelenir.</p>
             ''',
             unsafe_allow_html=True
         )
@@ -693,6 +794,284 @@ with tab_dashboard:
             hide_index=True,
             height=300,
         )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # =====================================================================
+    # NEW VISUALIZATIONS: TEMPORAL ANALYSIS
+    # =====================================================================
+    st.write("")
+    st.write("")
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align:center; margin: 30px 0 20px 0;">
+            <h2 style="color:#79c0ff; font-weight:800; font-size:2rem; letter-spacing:-0.5px;">📈 Zaman İçinde Analiz</h2>
+            <p style="color:#8b949e; font-size:1rem;">Üniversitelerin yıllar içindeki popülerlik ve duygu trendlerini keşfedin</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.write("")
+
+    # Visualization 1: "Hype" Graph (Normalized Tweet Counts)
+    st.markdown(
+        '''
+        <div class="glass-card">
+            <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Hype Grafiği</h4>
+            <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Hangi üniversite hangi yıl daha çok konuşuldu? Min-Max normalizasyonu ile tüm üniversiteler adil şekilde karşılaştırılır.</p>
+        ''',
+        unsafe_allow_html=True
+    )
+
+    hype_data = prepare_hype_data(DATA_DF)
+    if hype_data is not None and len(hype_data) > 0:
+        # Manually selected default universities (excluding BILKENT and HACETTEPE)
+        default_unis = ['ODTU', 'BOUN', 'ITU', 'YTU', 'ISTANBUL_UNI']
+        all_universities = sorted(hype_data['university'].unique())
+        
+        # Get top universities for highlighting (for star icons)
+        top_unis = hype_data.groupby('university')['total_tweets'].first().nlargest(6).index.tolist()
+        
+        # Multi-select for universities (default: manually selected 5)
+        selected_universities = st.multiselect(
+            "Üniversiteleri Seç (Karşılaştırma)",
+            options=all_universities,
+            default=default_unis,
+            help="En fazla 10 üniversite seçebilirsiniz. Karşılaştırma için 5 önemli üniversite varsayılan olarak seçilmiştir."
+        )
+        
+        # Limit to 10 universities for readability
+        if len(selected_universities) > 10:
+            st.warning("⚠️ En fazla 10 üniversite seçebilirsiniz. İlk 10'u gösteriyorum.")
+            selected_universities = selected_universities[:10]
+        
+        if len(selected_universities) > 0:
+            fig_hype = go.Figure()
+            
+            # Use Plotly's distinct color scales to ensure unique colors
+            # Combine multiple color scales for maximum variety
+            color_scale_1 = px.colors.qualitative.Plotly  # 10 colors
+            color_scale_2 = px.colors.qualitative.D3  # 10 colors
+            color_scale_3 = px.colors.qualitative.G10  # 10 colors
+            all_colors = color_scale_1 + color_scale_2 + color_scale_3  # 30 unique colors
+            
+            # Get all years for x-axis tick values
+            all_years = sorted(hype_data['year'].unique())
+            
+            for idx, uni in enumerate(selected_universities):
+                uni_data = hype_data[hype_data['university'] == uni].sort_values('year')
+                is_top = uni in top_unis
+                
+                # Highlight top universities with thicker lines
+                line_width = 3.0 if is_top else 2.0
+                
+                # Use unique color from combined palette
+                color_idx = idx % len(all_colors)
+                
+                fig_hype.add_trace(go.Scatter(
+                    x=uni_data['year'],
+                    y=uni_data['normalized_count'],
+                    mode='lines',
+                    name=f"{'⭐ ' if is_top else ''}{uni}",
+                    line=dict(
+                        width=line_width, 
+                        color=all_colors[color_idx],
+                        shape='spline',
+                        smoothing=1.3
+                    ),
+                    hovertemplate=f'<b>{uni}</b><br>Yıl: %{{x}}<br>Yoğunluk: %{{y:.2f}}<extra></extra>'
+                ))
+            
+            fig_hype.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#c9d1d9"),
+                yaxis=dict(
+                    title="Etkileşim Yoğunluğu (Normalize)",
+                    showgrid=True,
+                    gridcolor="rgba(255,255,255,0.05)",
+                    range=[0, 1.05]
+                ),
+                xaxis=dict(
+                    title="Yıl",
+                    showgrid=False,
+                    tickmode='array',
+                    tickvals=all_years,
+                    ticktext=[str(year) for year in all_years],
+                    range=[min(all_years) - 0.3, max(all_years) + 0.3]  # Add padding to show 2025 fully
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.4,
+                    xanchor="center",
+                    x=0.5,
+                    bgcolor="rgba(22, 27, 34, 0.8)",
+                    bordercolor="rgba(240, 246, 252, 0.15)",
+                    borderwidth=1,
+                    font=dict(size=11)
+                ),
+                height=550,  # Increased height for better visibility
+                margin=dict(t=10, l=0, r=0, b=90),
+                hovermode='x unified'
+            )
+            st.plotly_chart(fig_hype, use_container_width=True)
+        else:
+            st.info("👆 Lütfen en az bir üniversite seçin.")
+    else:
+        st.info("Zaman serisi verisi bulunamadı.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    st.write("")
+    
+    # Row 2: Happiness Curve + Heatmap
+    col_happiness, col_heatmap = st.columns([3, 2], gap="large")
+    
+    # Visualization 2: Happiness Change Curve
+    with col_happiness:
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Mutluluk Değişim Eğrisi</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Üniversiteler yıllar geçtikçe daha mı mutlu?</p>
+            ''',
+            unsafe_allow_html=True
+        )
+        
+        sentiment_data, turkey_avg = prepare_sentiment_trend_data(DATA_DF)
+        
+        if sentiment_data is not None and len(sentiment_data) > 0:
+            uni_list_sentiment = sorted(sentiment_data['university'].unique())
+            selected_uni_sentiment = st.selectbox(
+                "Üniversite Seç",
+                ["Tümü (Türkiye Ortalaması)"] + uni_list_sentiment,
+                key="sentiment_uni_select"
+            )
+            
+            # Get all years for x-axis
+            all_years_sentiment = sorted(sentiment_data['year'].unique())
+            
+            fig_sentiment = go.Figure()
+            
+            # Add Turkey average (dashed line)
+            if turkey_avg is not None:
+                fig_sentiment.add_trace(go.Scatter(
+                    x=turkey_avg['year'],
+                    y=turkey_avg['avg_sentiment_pct'],
+                    mode='lines',
+                    name='Türkiye Ortalaması',
+                    line=dict(width=2, color='#8b949e', dash='dash'),
+                    hovertemplate='<b>Türkiye Ort.</b><br>Yıl: %{x}<br>Pozitiflik: %{y:.1f}%<extra></extra>'
+                ))
+            
+            # Add selected university line (solid)
+            if selected_uni_sentiment != "Tümü (Türkiye Ortalaması)":
+                uni_sentiment_data = sentiment_data[sentiment_data['university'] == selected_uni_sentiment].sort_values('year')
+                fig_sentiment.add_trace(go.Scatter(
+                    x=uni_sentiment_data['year'],
+                    y=uni_sentiment_data['avg_sentiment_pct'],
+                    mode='lines+markers',
+                    name=selected_uni_sentiment,
+                    line=dict(width=4, color='#3fb950'),
+                    marker=dict(size=10, symbol='circle'),
+                    hovertemplate=f'<b>{selected_uni_sentiment}</b><br>Yıl: %{{x}}<br>Pozitiflik: %{{y:.1f}}%<extra></extra>'
+                ))
+            
+            fig_sentiment.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#c9d1d9"),
+                yaxis=dict(
+                    title="Pozitiflik Oranı (%)",
+                    showgrid=True,
+                    gridcolor="rgba(255,255,255,0.05)",
+                    range=[0, 100]
+                ),
+                xaxis=dict(
+                    title="Yıl",
+                    showgrid=False,
+                    tickmode='array',
+                    tickvals=all_years_sentiment,
+                    ticktext=[str(year) for year in all_years_sentiment],
+                    range=[min(all_years_sentiment) - 0.3, max(all_years_sentiment) + 0.3]  # Add padding to show 2025 fully
+                ),
+                legend=dict(
+                    orientation="v",
+                    yanchor="top",
+                    y=0.98,
+                    xanchor="left",
+                    x=0.02,
+                    bgcolor="rgba(22, 27, 34, 0.8)",
+                    bordercolor="rgba(240, 246, 252, 0.1)",
+                    borderwidth=1
+                ),
+                height=400,
+                margin=dict(t=10, l=0, r=0, b=40),
+            )
+            st.plotly_chart(fig_sentiment, use_container_width=True)
+        else:
+            st.info("Duygu trend verisi bulunamadı.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Visualization 3: Yearly Report Cards (Heatmap)
+    with col_heatmap:
+        st.markdown(
+            '''
+            <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Yıllık Karneler</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Her üniversitenin yıllara göre karnesi</p>
+            ''',
+            unsafe_allow_html=True
+        )
+        
+        heatmap_data = prepare_heatmap_data(DATA_DF)
+        
+        if heatmap_data is not None and not heatmap_data.empty:
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=heatmap_data.values,
+                x=heatmap_data.columns,
+                y=heatmap_data.index,
+                colorscale=[
+                    [0, '#f85149'],      # Red for negative
+                    [0.5, '#e3b341'],    # Yellow for neutral
+                    [1, '#3fb950']       # Green for positive
+                ],
+                text=heatmap_data.values.round(1),
+                texttemplate='%{text:.1f}%',
+                textfont={"size": 10},
+                colorbar=dict(
+                    title="Pozitif %",
+                    tickmode="linear",
+                    tick0=0,
+                    dtick=25,
+                    thickness=15,
+                    len=0.7
+                ),
+                hovertemplate='<b>%{y}</b><br>Yıl: %{x}<br>Pozitiflik: %{z:.1f}%<extra></extra>'
+            ))
+            
+            fig_heatmap.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#c9d1d9"),
+                xaxis=dict(
+                    title="Yıl",
+                    side="bottom",
+                    dtick=1
+                ),
+                yaxis=dict(
+                    title="Üniversite",
+                ),
+                height=400,
+                margin=dict(t=10, l=120, r=0, b=40),
+            )
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+        else:
+            st.info("Heatmap verisi bulunamadı.")
+        
         st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================================================================
