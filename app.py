@@ -706,6 +706,32 @@ with tab_dashboard:
         st.markdown(
             '''
             <div class="glass-card">
+                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Performans Özeti</h4>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Accuracy, F1, Precision ve Recall metriklerinin detaylı karşılaştırması.</p>
+            ''',
+            unsafe_allow_html=True
+        )
+
+        perf_table = metrics_df[["Model", "Accuracy", "Macro F1", "Precision", "Recall"]].copy()
+        st.dataframe(
+            perf_table.style.format("{:.3f}", subset=["Accuracy", "Macro F1", "Precision", "Recall"])
+            .background_gradient(cmap="Greens", subset=["Accuracy"], vmin=0.75, vmax=0.95)
+            .background_gradient(cmap="Greens", subset=["Macro F1"], vmin=0.70, vmax=0.92)
+            .background_gradient(cmap="Greens", subset=["Precision"], vmin=0.75, vmax=0.92)
+            .background_gradient(cmap="Greens", subset=["Recall"], vmin=0.70, vmax=0.92),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    st.write("")
+    col_tbl1, col_tbl2 = st.columns(2, gap="large")
+
+    with col_tbl1:
+        st.markdown(
+            '''
+            <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Üniversite Bazlı Dağılım</h4>
                 <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Seçilen üniversitenin pozitif ve negatif yorum oranlarını görselleştirin.</p>
             ''',
@@ -735,39 +761,13 @@ with tab_dashboard:
                     paper_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#c9d1d9"),
                     margin=dict(t=0, b=0, l=0, r=0),
-                    height=220,
+                    height=280,
                     showlegend=True,
                     legend=dict(orientation="h", x=0.15, y=-0.1),
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("Veri yok.")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.write("")
-    st.write("")
-    col_tbl1, col_tbl2 = st.columns(2, gap="large")
-
-    with col_tbl1:
-        st.markdown(
-            '''
-            <div class="glass-card">
-                <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Performans Özeti</h4>
-                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Accuracy, F1, Precision ve Recall metriklerinin detaylı karşılaştırması.</p>
-            ''',
-            unsafe_allow_html=True
-        )
-
-        perf_table = metrics_df[["Model", "Accuracy", "Macro F1", "Precision", "Recall"]].copy()
-        st.dataframe(
-            perf_table.style.format("{:.3f}", subset=["Accuracy", "Macro F1", "Precision", "Recall"])
-            .background_gradient(cmap="Greens", subset=["Accuracy"], vmin=0.75, vmax=0.95)
-            .background_gradient(cmap="Greens", subset=["Macro F1"], vmin=0.70, vmax=0.92)
-            .background_gradient(cmap="Greens", subset=["Precision"], vmin=0.75, vmax=0.92)
-            .background_gradient(cmap="Greens", subset=["Recall"], vmin=0.70, vmax=0.92),
-            use_container_width=True,
-            hide_index=True,
-        )
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col_tbl2:
