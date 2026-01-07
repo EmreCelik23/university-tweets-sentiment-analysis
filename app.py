@@ -21,28 +21,33 @@ st.set_page_config(
 # SABİT METRİKLER (TEST SONUÇLARINDAN)
 # =====================================================================
 MODEL_METRICS = {
-    "BERTurk": {"Accuracy": 0.9247, "Macro F1": 0.9045, "Precision": 0.9064, "Recall": 0.9027, "Support": 757},
-    "CNN-BiLSTM": {"Accuracy": 0.8534, "Macro F1": 0.7899, "Precision": 0.8528, "Recall": 0.7610, "Support": 757},
-    "BiLSTM": {"Accuracy": 0.8296, "Macro F1": 0.7697, "Precision": 0.7949, "Recall": 0.7538, "Support": 757},
-    "CNN": {"Accuracy": 0.8151, "Macro F1": 0.7558, "Precision": 0.7702, "Recall": 0.7453, "Support": 757},
+    "BERTurk": {"Accuracy": 0.9018, "Macro F1": 0.8796, "Precision": 0.8642, "Recall": 0.9013, "Support": 1110},
+    "BERTweet": {"Accuracy": 0.9099, "Macro F1": 0.8874, "Precision": 0.8762, "Recall": 0.9013, "Support": 1110},
+    "CNN-BiLSTM": {"Accuracy": 0.8811, "Macro F1": 0.8446, "Precision": 0.8486, "Recall": 0.8408, "Support": 1110},
+    "BiLSTM": {"Accuracy": 0.8532, "Macro F1": 0.8216, "Precision": 0.8073, "Recall": 0.8440, "Support": 1110},
+    "CNN": {"Accuracy": 0.8523, "Macro F1": 0.8082, "Precision": 0.8096, "Recall": 0.8068, "Support": 1110},
 }
 
 MODEL_CLASS_METRICS = {
     "BERTurk": {
-        "0_olumsuz": {"precision": 0.9458, "recall": 0.9510, "f1": 0.9484, "support": 551},
-        "1_olumlu": {"precision": 0.8670, "recall": 0.8544, "f1": 0.8606, "support": 206},
+        "0_olumsuz": {"precision": 0.9622, "recall": 0.9923, "f1": 0.9313, "support": 819},
+        "1_olumlu": {"precision": 0.7661, "recall": 0.9003, "f1": 0.8278, "support": 291},
+    },
+    "BERTweet": {
+        "0_olumsuz": {"precision": 0.9568, "recall": 0.9194, "f1": 0.9377, "support": 819},
+        "1_olumlu": {"precision": 0.7957, "recall": 0.8832, "f1": 0.8371, "support": 291},
     },
     "CNN-BiLSTM": {
-        "0_olumsuz": {"precision": 0.8564, "recall": 0.9201, "f1": 0.8871, "support": 551},
-        "1_olumlu": {"precision": 0.7333, "recall": 0.5874, "f1": 0.6523, "support": 206},
+        "0_olumsuz": {"precision": 0.9144, "recall": 0.9255, "f1": 0.9199, "support": 819},
+        "1_olumlu": {"precision": 0.7829, "recall": 0.7560, "f1": 0.7692, "support": 291},
     },
     "BiLSTM": {
-        "0_olumsuz": {"precision": 0.8549, "recall": 0.8984, "f1": 0.8761, "support": 551},
-        "1_olumlu": {"precision": 0.6854, "recall": 0.5922, "f1": 0.6354, "support": 206},
+        "0_olumsuz": {"precision": 0.9327, "recall": 0.8632, "f1": 0.8966, "support": 819},
+        "1_olumlu": {"precision": 0.6818, "recall": 0.8247, "f1": 0.7465, "support": 291},
     },
     "CNN": {
-        "0_olumsuz": {"precision": 0.8537, "recall": 0.9637, "f1": 0.9054, "support": 551},
-        "1_olumlu": {"precision": 0.8519, "recall": 0.5583, "f1": 0.6745, "support": 206},
+        "0_olumsuz": {"precision": 0.8979, "recall": 0.9023, "f1": 0.9001, "support": 819},
+        "1_olumlu": {"precision": 0.7213, "recall": 0.7113, "f1": 0.7163, "support": 291},
     },
 }
 
@@ -79,10 +84,9 @@ def render_lab_card(text: str, res: dict):
     txt_safe = _escape_html(text)
 
     chips = []
-    for model_name in ["BERTurk", "CNN-BiLSTM", "BiLSTM", "CNN"]:
+    for model_name in ["BERTurk", "BERTweet", "CNN-BiLSTM", "BiLSTM", "CNN"]:
         pred = res.get(model_name, (0, 0))[0] if res.get(model_name) else 0
         dot_color = "#3fb950" if pred == 1 else "#f85149"
-        label = "POZİTİF" if pred == 1 else "NEGATİF"
 
         chip_html = f"""
 <div class="pred-chip">
@@ -90,7 +94,6 @@ def render_lab_card(text: str, res: dict):
     <span class="dot" style="background:{dot_color};"></span>
     <span>{model_name}</span>
   </div>
-  <div class="pred-right" style="color:{dot_color};">{label}</div>
 </div>
 """.strip()
         chips.append(chip_html)
@@ -436,8 +439,21 @@ st.markdown(
     }
     .lab-preds {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+    }
+    /* Üst satır: BERTurk ve BERTweet (her biri 3 kolon kaplayacak = toplam 6 kolon) */
+    .pred-chip:nth-child(1) {
+        grid-column: span 3;
+    }
+    .pred-chip:nth-child(2) {
+        grid-column: span 3;
+    }
+    /* Alt satır: CNN-BiLSTM, BiLSTM, CNN (her biri 2 kolon kaplayacak = toplam 6 kolon) */
+    .pred-chip:nth-child(3),
+    .pred-chip:nth-child(4),
+    .pred-chip:nth-child(5) {
+        grid-column: span 2;
     }
     .pred-chip {
         background: rgba(22, 27, 34, 0.65);
@@ -590,16 +606,19 @@ with tab_live:
 
         if st.session_state["last_results"]:
             results = st.session_state["last_results"]
-            c_res1, c_res2 = st.columns(2, gap="large")
-            models_list = ["BERTurk", "CNN-BiLSTM", "BiLSTM", "CNN"]
-
-            for i, model_name in enumerate(models_list):
+            
+            # Üst satır: BERT modelleri (BERTurk, BERTweet)
+            st.markdown('<div style="margin-bottom:10px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">🤖 Transformer Models</span></div>', unsafe_allow_html=True)
+            c_bert1, c_bert2 = st.columns(2, gap="medium")
+            bert_models = ["BERTurk", "BERTweet"]
+            
+            for i, model_name in enumerate(bert_models):
                 data = results.get(model_name)
-                target_col = c_res1 if i % 2 == 0 else c_res2
-
+                target_col = c_bert1 if i == 0 else c_bert2
+                
                 with target_col:
                     if data is None:
-                        st.error(f"{model_name} N/A")
+                        st.info(f"{model_name} henüz yüklenmedi")
                     else:
                         pred, _ = data
                         sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
@@ -613,6 +632,41 @@ with tab_live:
                                 <h5 style="color:#8b949e; margin:0; font-weight:700; text-transform:uppercase; letter-spacing:1px; font-size:0.8rem;">{model_name}</h5>
                                 <div style="font-size:3rem; margin:10px 0;">{emoji}</div>
                                 <h3 style="color:{text_color}; margin:0; letter-spacing:0.5px;">{sentiment}</h3>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+            
+            # Alt satır: Klasik modeller (CNN-BiLSTM, BiLSTM, CNN)
+            st.markdown('<div style="margin-bottom:10px; margin-top:20px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">⚡ Classical Models</span></div>', unsafe_allow_html=True)
+            c_cls1, c_cls2, c_cls3 = st.columns(3, gap="small")
+            classical_models = ["CNN-BiLSTM", "BiLSTM", "CNN"]
+            
+            for i, model_name in enumerate(classical_models):
+                data = results.get(model_name)
+                if i == 0:
+                    target_col = c_cls1
+                elif i == 1:
+                    target_col = c_cls2
+                else:
+                    target_col = c_cls3
+                
+                with target_col:
+                    if data is None:
+                        st.info(f"{model_name} N/A")
+                    else:
+                        pred, _ = data
+                        sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
+                        card_class = "model-card-positive" if pred == 1 else "model-card-negative"
+                        emoji = "😊" if pred == 1 else "😡"
+                        text_color = "#3fb950" if pred == 1 else "#f85149"
+
+                        st.markdown(
+                            f"""
+                            <div class="glass-card {card_class}" style="text-align:center; margin-bottom:20px; padding:16px; min-height:140px; display:flex; flex-direction:column; justify-content:center;">
+                                <h5 style="color:#8b949e; margin:0; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; font-size:0.7rem;">{model_name}</h5>
+                                <div style="font-size:2.5rem; margin:8px 0;">{emoji}</div>
+                                <h4 style="color:{text_color}; margin:0; letter-spacing:0.4px; font-size:1.1rem;">{sentiment}</h4>
                             </div>
                             """,
                             unsafe_allow_html=True,

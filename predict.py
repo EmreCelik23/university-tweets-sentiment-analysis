@@ -19,6 +19,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MODEL_PATHS = {
     "BERTurk": "models/berturk_model",      # HF klasörü (config.json burada)
+    "BERTweet": "models/bertweet_model",    # HF klasörü (Turkish BERTweet)
     "CNN": "models/cnn_model.pt",           # cnn_spm_best.pt'yi böyle adlandırdıysan
     "BiLSTM": "models/bilstm_model.pt",     # bilstm_spm_best.pt
     "CNN-BiLSTM": "models/hybrid_model.pt", # cnn_bilstm_spm_best.pt
@@ -268,10 +269,10 @@ def get_model(model_name: str) -> Any:
 
     print(f"🛠 {model_name} yükleniyor...")
 
-    # ---------- BERTURK ----------
-    if model_name == "BERTurk":
+    # ---------- BERTURK / BERTWEET ----------
+    if model_name in ["BERTurk", "BERTweet"]:
         if not os.path.isdir(path):
-            raise FileNotFoundError(f"BERTurk klasörü bulunamadı: {path}")
+            raise FileNotFoundError(f"{model_name} klasörü bulunamadı: {path}")
 
         tok = AutoTokenizer.from_pretrained(path, use_fast=True)
         model = AutoModelForSequenceClassification.from_pretrained(path)
@@ -280,7 +281,7 @@ def get_model(model_name: str) -> Any:
 
         container = {"type": "hf", "model": model, "tokenizer": tok}
         _loaded_models[model_name] = container
-        print("✅ BERTurk hazır.")
+        print(f"✅ {model_name} hazır.")
         return container
 
     # ---------- DL MODELLER (CNN / BiLSTM / CNN-BiLSTM) ----------
@@ -314,18 +315,15 @@ def get_model(model_name: str) -> Any:
 # TAHMİN MOTORU (Streamlit'in kullandığı)
 # ======================================================================
 
-def _predict_with_bert(text: str, university: str) -> Tuple[int, float]:
-    m = get_model("BERTurk")
+def _predict_with_bert(text: str, university: str, model_name: str = "BERTurk") -> Tuple[int, float]:
+    m = get_model(model_name)
     tok = m["tokenizer"]
     model = m["model"]
 
     clean_txt = clean_text_minimal(text)
     
-    # Eğer üniversite boş veya "Genel" ise, sadece text gönder
-    if not university or university.strip().lower() in ["", "genel"]:
-        inp = clean_txt
-    else:
-        inp = f"Üniversite: {university} || {clean_txt}"
+    # Sadece text kullan, üniversite bilgisini ekleme
+    inp = clean_txt
 
     enc = tok(
         inp,
@@ -373,6 +371,7 @@ def get_multi_model_prediction(
     Dönüş:
       {
         "BERTurk":    (pred, conf),
+        "BERTweet":   (pred, conf) veya None,
         "CNN-BiLSTM": (pred, conf) veya None,
         "BiLSTM":     (pred, conf) veya None,
         "CNN":        (pred, conf) veya None
@@ -380,11 +379,23 @@ def get_multi_model_prediction(
     """
     results: Dict[str, Optional[Tuple[int, float]]] = {}
 
-    # Ana model: BERTurk (burada hata olursa gerçekten patlasın)
-    bert_pred, bert_conf = _predict_with_bert(text, university)
-    results["BERTurk"] = (bert_pred, bert_conf)
+    # Transformer modeller: BERTurk ve BERTweet
+    try:
+        bert_pred, bert_conf = _predict_with_bert(text, university)
+        results["BERTurk"] = (bert_pred, bert_conf)
+    except Exception as e:
+        print(f"[ERROR] BERTurk tahmini yapılamadı: {e}")
+        results["BERTurk"] = None
+    
+    try:
+        # BERTweet için aynı fonksiyonu kullan (ikisi de HuggingFace transformer)
+        bertweet_pred, bertweet_conf = _predict_with_bert(text, university, model_name="BERTweet")
+        results["BERTweet"] = (bertweet_pred, bertweet_conf)
+    except Exception as e:
+        print(f"[WARN] BERTweet tahmini yapılamadı: {e}")
+        results["BERTweet"] = None
 
-    # Diğer modeller: hata varsa logla, sonuç yerine None koy
+    # Klasik modeller: hata varsa logla, sonuç yerine None koy
     for name in ["CNN-BiLSTM", "BiLSTM", "CNN"]:
         try:
             p, c = _predict_with_dl(name, text)
@@ -416,8 +427,8 @@ def main():
         raise SystemExit(f"Eksik kolon(lar): {missing}. Gerekli kolonlar: {needed}")
 
     texts = [clean_text_minimal(x) for x in df["text"].astype(str).tolist()]
-    unis = df["university"].astype(str).tolist()
-    inputs = [f"Üniversite: {u} || {t}" for u, t in zip(unis, texts)]
+    # Sadece text kullan, üniversite bilgisini ekleme
+    inputs = texts
 
     m = get_model("BERTurk")
     tok = m["tokenizer"]
