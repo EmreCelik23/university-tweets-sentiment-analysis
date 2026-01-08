@@ -1,6 +1,10 @@
 ````markdown
 # 🌌 YTU CE COSMOS | Sentiment Analysis Project
 
+## Contributors
+- Emre Çelik
+- Alihan Uludağ
+
 Bu proje, Yıldız Teknik Üniversitesi Bilgisayar Mühendisliği bitirme projesi kapsamında geliştirilmiştir. 
 Derin Öğrenme (CNN, BiLSTM, Hybrid) ve BERTurk modelleri kullanılarak, Twitter verileri üzerinden Türk Üniversitelerine yönelik duygu analizi yapar.
 
