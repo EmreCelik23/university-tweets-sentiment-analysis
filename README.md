@@ -301,15 +301,6 @@ This project is part of a university graduation project. Please contact contribu
 
 ---
 
-## Acknowledgments
-
-- Yıldız Technical University Computer Engineering Department
-- Turkish NLP community for pre-trained models
-- Hugging Face for transformer implementations
-- Streamlit team for the amazing framework
-
----
-
 ## Contact
 
 For questions, suggestions, or collaboration:
