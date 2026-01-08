@@ -520,7 +520,7 @@ with tab_live:
             <div class="glass-card">
                 <h3 style="margin-top:0; color:#c9d1d9;">Yorum Analizi</h3>
                 <p style="color:#8b949e; font-size:0.95rem; margin-bottom:18px;">
-                    Aşağıya bir metin girin ve 4 farklı modelin (BERTurk, CNN-BiLSTM, BiLSTM, CNN) anlık duygu analizini izleyin.
+                    Aşağıya bir metin girin ve 5 farklı modelin (BERTurk, Electra, CNN-BiLSTM, BiLSTM, CNN) anlık duygu analizini izleyin.
                 </p>
             """,
             unsafe_allow_html=True,
@@ -730,7 +730,7 @@ with tab_dashboard:
             '''
             <div class="glass-card">
                 <h4 style="margin-top:0; margin-bottom:8px; color:#c9d1d9; font-weight:800; font-size:1.15rem; letter-spacing:-0.2px;">Model Başarı Sıralaması (Macro F1)</h4>
-                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Dört farklı modelin genel performans karşılaştırması - yüksek F1 skoru daha dengeli tahmin anlamına gelir.</p>
+                <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Beş farklı modelin genel performans karşılaştırması - yüksek F1 skoru daha dengeli tahmin anlamına gelir.</p>
             ''',
             unsafe_allow_html=True
         )
@@ -846,7 +846,7 @@ with tab_dashboard:
             class_df.style.format("{:.3f}", subset=["Precision", "Recall", "F1"]),
             use_container_width=True,
             hide_index=True,
-            height=300,
+            height=388,
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -859,8 +859,8 @@ with tab_dashboard:
     st.markdown(
         """
         <div style="text-align:center; margin: 30px 0 20px 0;">
-            <h2 style="color:#79c0ff; font-weight:800; font-size:2rem; letter-spacing:-0.5px;">📈 Zaman İçinde Analiz</h2>
-            <p style="color:#8b949e; font-size:1rem;">Üniversitelerin yıllar içindeki popülerlik ve duygu trendlerini keşfedin</p>
+            <h2 style="color:#79c0ff; font-weight:800; font-size:2rem; letter-spacing:-0.5px;">Yıllara Göre Analiz</h2>
+            <p style="color:#8b949e; font-size:1rem;">Üniversitelerin yıllar içindeki popülerlik ve duygu trendleri...</p>
         </div>
         """,
         unsafe_allow_html=True
