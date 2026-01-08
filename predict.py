@@ -19,7 +19,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MODEL_PATHS = {
     "BERTurk": "models/berturk_model",      # HF klasörü (config.json burada)
-    "BERTweet": "models/bertweet_model",    # HF klasörü (Turkish BERTweet)
+    "Electra": "models/electra_model",      # HF klasörü (Turkish ELECTRA)
     "CNN": "models/cnn_model.pt",           # cnn_spm_best.pt'yi böyle adlandırdıysan
     "BiLSTM": "models/bilstm_model.pt",     # bilstm_spm_best.pt
     "CNN-BiLSTM": "models/hybrid_model.pt", # cnn_bilstm_spm_best.pt
@@ -267,10 +267,8 @@ def get_model(model_name: str) -> Any:
     if path is None:
         raise ValueError(f"MODEL_PATHS içinde {model_name} tanımlı değil.")
 
-    print(f"🛠 {model_name} yükleniyor...")
-
-    # ---------- BERTURK / BERTWEET ----------
-    if model_name in ["BERTurk", "BERTweet"]:
+    # ---------- BERTURK / ELECTRA ----------
+    if model_name in ["BERTurk", "Electra"]:
         if not os.path.isdir(path):
             raise FileNotFoundError(f"{model_name} klasörü bulunamadı: {path}")
 
@@ -281,7 +279,6 @@ def get_model(model_name: str) -> Any:
 
         container = {"type": "hf", "model": model, "tokenizer": tok}
         _loaded_models[model_name] = container
-        print(f"✅ {model_name} hazır.")
         return container
 
     # ---------- DL MODELLER (CNN / BiLSTM / CNN-BiLSTM) ----------
@@ -298,7 +295,7 @@ def get_model(model_name: str) -> Any:
         raise RuntimeError(f"{model_name} checkpoint yapısı dict değil.")
 
     sp = get_spm()
-    vocab_size = sp.vocab_size()  # veya get_piece_size()
+    vocab_size = sp.get_piece_size()
 
     model = _build_model_instance(model_name, vocab_size)
     model.load_state_dict(state_dict)
@@ -307,7 +304,6 @@ def get_model(model_name: str) -> Any:
 
     container = {"type": "pt", "model": model}
     _loaded_models[model_name] = container
-    print(f"✅ {model_name} hazır (vocab_size={vocab_size}).")
     return container
 
 
@@ -336,11 +332,36 @@ def _predict_with_bert(text: str, university: str, model_name: str = "BERTurk") 
     with torch.no_grad():
         out = model(**enc)
         probs = torch.softmax(out.logits, dim=-1).cpu().numpy()[0]
-        pred = int(probs.argmax())
-        conf = float(probs.max())
+        
+        # Electra için threshold tuning kullan (varsa)
+        if model_name == "Electra":
+            threshold = _load_electra_threshold()
+            prob_pos = float(probs[1])
+            pred = 1 if prob_pos >= threshold else 0
+            conf = prob_pos if pred == 1 else float(probs[0])
+        else:
+            pred = int(probs.argmax())
+            conf = float(probs.max())
 
     # 0=olumsuz, 1=olumlu
     return pred, conf
+
+
+def _load_electra_threshold() -> float:
+    """
+    Electra için inference_threshold.json'dan threshold yükle.
+    Dosya yoksa default 0.5 kullan.
+    """
+    threshold_path = os.path.join(MODEL_PATHS.get("Electra", "models/electra_model"), "inference_threshold.json")
+    if os.path.exists(threshold_path):
+        try:
+            import json
+            with open(threshold_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return float(data.get("threshold", 0.5))
+        except Exception:
+            pass
+    return 0.5
 
 
 def _predict_with_dl(model_name: str, text: str) -> Tuple[int, float]:
@@ -371,7 +392,7 @@ def get_multi_model_prediction(
     Dönüş:
       {
         "BERTurk":    (pred, conf),
-        "BERTweet":   (pred, conf) veya None,
+        "Electra":    (pred, conf) veya None,
         "CNN-BiLSTM": (pred, conf) veya None,
         "BiLSTM":     (pred, conf) veya None,
         "CNN":        (pred, conf) veya None
@@ -379,29 +400,25 @@ def get_multi_model_prediction(
     """
     results: Dict[str, Optional[Tuple[int, float]]] = {}
 
-    # Transformer modeller: BERTurk ve BERTweet
+    # Transformer modeller: BERTurk, Electra
     try:
         bert_pred, bert_conf = _predict_with_bert(text, university)
         results["BERTurk"] = (bert_pred, bert_conf)
-    except Exception as e:
-        print(f"[ERROR] BERTurk tahmini yapılamadı: {e}")
+    except Exception:
         results["BERTurk"] = None
     
     try:
-        # BERTweet için aynı fonksiyonu kullan (ikisi de HuggingFace transformer)
-        bertweet_pred, bertweet_conf = _predict_with_bert(text, university, model_name="BERTweet")
-        results["BERTweet"] = (bertweet_pred, bertweet_conf)
-    except Exception as e:
-        print(f"[WARN] BERTweet tahmini yapılamadı: {e}")
-        results["BERTweet"] = None
+        electra_pred, electra_conf = _predict_with_bert(text, university, model_name="Electra")
+        results["Electra"] = (electra_pred, electra_conf)
+    except Exception:
+        results["Electra"] = None
 
     # Klasik modeller: hata varsa logla, sonuç yerine None koy
     for name in ["CNN-BiLSTM", "BiLSTM", "CNN"]:
         try:
             p, c = _predict_with_dl(name, text)
             results[name] = (p, c)
-        except Exception as e:
-            print(f"[WARN] {name} tahmini yapılamadı: {e}")
+        except Exception:
             results[name] = None
 
     return results

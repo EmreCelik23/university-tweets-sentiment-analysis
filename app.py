@@ -22,7 +22,7 @@ st.set_page_config(
 # =====================================================================
 MODEL_METRICS = {
     "BERTurk": {"Accuracy": 0.9018, "Macro F1": 0.8796, "Precision": 0.8642, "Recall": 0.9013, "Support": 1110},
-    "BERTweet": {"Accuracy": 0.9099, "Macro F1": 0.8874, "Precision": 0.8762, "Recall": 0.9013, "Support": 1110},
+    "Electra": {"Accuracy": 0.9198, "Macro F1": 0.8948, "Precision": 0.9010, "Recall": 0.8892, "Support": 1110},
     "CNN-BiLSTM": {"Accuracy": 0.8811, "Macro F1": 0.8446, "Precision": 0.8486, "Recall": 0.8408, "Support": 1110},
     "BiLSTM": {"Accuracy": 0.8532, "Macro F1": 0.8216, "Precision": 0.8073, "Recall": 0.8440, "Support": 1110},
     "CNN": {"Accuracy": 0.8523, "Macro F1": 0.8082, "Precision": 0.8096, "Recall": 0.8068, "Support": 1110},
@@ -30,12 +30,12 @@ MODEL_METRICS = {
 
 MODEL_CLASS_METRICS = {
     "BERTurk": {
-        "0_olumsuz": {"precision": 0.9622, "recall": 0.9923, "f1": 0.9313, "support": 819},
+        "0_olumsuz": {"precision": 0.9622, "recall": 0.9023, "f1": 0.9313, "support": 819},
         "1_olumlu": {"precision": 0.7661, "recall": 0.9003, "f1": 0.8278, "support": 291},
     },
-    "BERTweet": {
-        "0_olumsuz": {"precision": 0.9568, "recall": 0.9194, "f1": 0.9377, "support": 819},
-        "1_olumlu": {"precision": 0.7957, "recall": 0.8832, "f1": 0.8371, "support": 291},
+    "Electra": {
+        "0_olumsuz": {"precision": 0.9387, "recall": 0.9536, "f1": 0.9461, "support": 819},
+        "1_olumlu": {"precision": 0.8633, "recall": 0.8247, "f1": 0.8436, "support": 291},
     },
     "CNN-BiLSTM": {
         "0_olumsuz": {"precision": 0.9144, "recall": 0.9255, "f1": 0.9199, "support": 819},
@@ -84,7 +84,7 @@ def render_lab_card(text: str, res: dict):
     txt_safe = _escape_html(text)
 
     chips = []
-    for model_name in ["BERTurk", "BERTweet", "CNN-BiLSTM", "BiLSTM", "CNN"]:
+    for model_name in ["BERTurk", "Electra", "CNN-BiLSTM", "BiLSTM", "CNN"]:
         pred = res.get(model_name, (0, 0))[0] if res.get(model_name) else 0
         dot_color = "#3fb950" if pred == 1 else "#f85149"
 
@@ -442,7 +442,7 @@ st.markdown(
         grid-template-columns: repeat(6, 1fr);
         gap: 8px;
     }
-    /* Üst satır: BERTurk ve BERTweet (her biri 3 kolon kaplayacak = toplam 6 kolon) */
+    /* Üst satır: BERTurk ve Electra (her biri 3 kolon kaplayacak = toplam 6 kolon) */
     .pred-chip:nth-child(1) {
         grid-column: span 3;
     }
@@ -607,10 +607,10 @@ with tab_live:
         if st.session_state["last_results"]:
             results = st.session_state["last_results"]
             
-            # Üst satır: BERT modelleri (BERTurk, BERTweet)
-            st.markdown('<div style="margin-bottom:10px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">🤖 Transformer Models</span></div>', unsafe_allow_html=True)
+            # Üst satır: BERT modelleri (BERTurk, Electra)
+            st.markdown('<div style="margin-bottom:10px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Transformer Models</span></div>', unsafe_allow_html=True)
             c_bert1, c_bert2 = st.columns(2, gap="medium")
-            bert_models = ["BERTurk", "BERTweet"]
+            bert_models = ["BERTurk", "Electra"]
             
             for i, model_name in enumerate(bert_models):
                 data = results.get(model_name)
@@ -638,7 +638,7 @@ with tab_live:
                         )
             
             # Alt satır: Klasik modeller (CNN-BiLSTM, BiLSTM, CNN)
-            st.markdown('<div style="margin-bottom:10px; margin-top:20px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">⚡ Classical Models</span></div>', unsafe_allow_html=True)
+            st.markdown('<div style="margin-bottom:10px; margin-top:20px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Classical Models</span></div>', unsafe_allow_html=True)
             c_cls1, c_cls2, c_cls3 = st.columns(3, gap="small")
             classical_models = ["CNN-BiLSTM", "BiLSTM", "CNN"]
             
