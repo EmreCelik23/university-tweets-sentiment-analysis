@@ -1,4 +1,3 @@
-import argparse
 import os
 import re
 from typing import Dict, Any, Tuple, Optional
@@ -35,18 +34,6 @@ EMBED_DIM = 200
 HIDDEN_DIM = 128
 NUM_FILTERS = 100
 FILTER_SIZES = (3, 4, 5)
-
-OUTPUT_COL_ORDER = [
-    "type",
-    "url",
-    "tags",
-    "text",
-    "createdAt",
-    "location",
-    "authorUserName",
-    "university",
-    "group",
-]
 
 _loaded_models: Dict[str, Any] = {}
 _spm: Optional[spm.SentencePieceProcessor] = None
@@ -196,21 +183,6 @@ def normalize_tweet(text: str) -> str:
     t = re.sub(r"\s+", " ", t).strip()
 
     return t
-
-
-def load_df(path: str) -> pd.DataFrame:
-    ext = os.path.splitext(path)[1].lower()
-    if ext in [".xlsx", ".xls"]:
-        return pd.read_excel(path)
-    return pd.read_csv(path)
-
-
-def save_df(df: pd.DataFrame, path: str):
-    ext = os.path.splitext(path)[1].lower()
-    if ext in [".xlsx", ".xls"]:
-        df.to_excel(path, index=False)
-    else:
-        df.to_csv(path, index=False)
 
 
 def _build_model_instance(model_name: str, vocab_size: int) -> nn.Module:
@@ -422,76 +394,3 @@ def get_multi_model_prediction(
             results[name] = None
 
     return results
-
-
-# ======================================================================
-# CLI: TOPLU ETİKETLEME (sadece BERTurk ile 0/1 tags)
-# ======================================================================
-
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--inp", required=True, help="xlsx/csv giriş (en az: text, university)")
-    ap.add_argument("--out", required=True, help="xlsx/csv çıkış")
-    ap.add_argument("--batch", type=int, default=64)
-    ap.add_argument("--maxlen", type=int, default=256)
-    args = ap.parse_args()
-
-    df = load_df(args.inp)
-
-    needed = {"text", "university"}
-    missing = needed - set(df.columns)
-    if missing:
-        raise SystemExit(f"Eksik kolon(lar): {missing}. Gerekli kolonlar: {needed}")
-
-    texts = [clean_text_minimal(x) for x in df["text"].astype(str).tolist()]
-    # Sadece text kullan, üniversite bilgisini ekleme
-    inputs = texts
-
-    m = get_model("BERTurk")
-    tok = m["tokenizer"]
-    model = m["model"]
-    model.eval()
-
-    preds, confs = [], []
-
-    try:
-        from tqdm import tqdm
-        iterator = tqdm(range(0, len(inputs), args.batch), desc="Predict")
-    except Exception:
-        iterator = range(0, len(inputs), args.batch)
-
-    with torch.no_grad():
-        for i in iterator:
-            chunk = inputs[i:i + args.batch]
-            enc = tok(
-                chunk,
-                truncation=True,
-                padding=True,
-                max_length=args.maxlen,
-                return_tensors="pt",
-            ).to(DEVICE)
-
-            out = model(**enc)
-            probs = torch.softmax(out.logits, dim=-1).cpu().numpy()
-            pred_i = probs.argmax(axis=1)
-            mx = probs.max(axis=1)
-
-            preds.extend(pred_i.tolist())
-            confs.extend(mx.tolist())
-
-    out_df = df.copy()
-    out_df["tags"] = preds      # 0 / 1
-    out_df["confidence"] = confs
-
-    for col in OUTPUT_COL_ORDER:
-        if col not in out_df.columns:
-            out_df[col] = pd.NA
-
-    out_df = out_df[OUTPUT_COL_ORDER + [c for c in out_df.columns if c not in OUTPUT_COL_ORDER]]
-
-    save_df(out_df, args.out)
-    print(f"✅ Kaydedildi -> {args.out}")
-
-
-if __name__ == "__main__":
-    main()
