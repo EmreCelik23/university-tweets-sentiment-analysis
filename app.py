@@ -71,6 +71,28 @@ if "last_input" not in st.session_state:
     st.session_state["last_input"] = ""
 if "last_results" not in st.session_state:
     st.session_state["last_results"] = None
+if "theme_mode" not in st.session_state:
+    st.session_state["theme_mode"] = "Karanlık"
+
+IS_LIGHT_THEME = st.session_state["theme_mode"] == "Aydınlık"
+POS_COLOR = "#16a34a" if IS_LIGHT_THEME else "#3fb950"
+NEG_COLOR = "#dc2626" if IS_LIGHT_THEME else "#f85149"
+PLOT_FONT_COLOR = "#1f2937" if IS_LIGHT_THEME else "#c9d1d9"
+PLOT_GRID_COLOR = "rgba(15, 23, 42, 0.14)" if IS_LIGHT_THEME else "rgba(255,255,255,0.05)"
+PLOT_LEGEND_BG = "rgba(255,255,255,0.92)" if IS_LIGHT_THEME else "rgba(22, 27, 34, 0.8)"
+PLOT_LEGEND_BORDER = "rgba(148, 163, 184, 0.55)" if IS_LIGHT_THEME else "rgba(240, 246, 252, 0.15)"
+PLOT_TITLE_COLOR = "#0f172a" if IS_LIGHT_THEME else "#c9d1d9"
+PLOT_AXIS_TICK_SIZE = 15
+HYPE_LEGEND_FONT_SIZE = 18
+PIE_BORDER_COLOR = "#e2e8f0" if IS_LIGHT_THEME else "#0d1117"
+TURKEY_AVG_LINE_COLOR = "#64748b" if IS_LIGHT_THEME else "#8b949e"
+ANALYSIS_HEADING_COLOR = "#2563eb" if IS_LIGHT_THEME else "#79c0ff"
+METRIC_LABEL_COLOR = "#334155" if IS_LIGHT_THEME else "#8b949e"
+METRIC_VALUE_COLOR = "#0f172a" if IS_LIGHT_THEME else "#ffffff"
+METRIC_VALUE_SHADOW = "none" if IS_LIGHT_THEME else "0 0 10px rgba(88,166,255,0.2)"
+
+TRANSFORMER_MODELS = ["BERTurk", "Electra", "TabiBERT"]
+CLASSICAL_MODELS = ["CNN-BiLSTM", "BiLSTM", "CNN"]
 
 # =====================================================================
 # HELPERS
@@ -84,9 +106,9 @@ def render_lab_card(text: str, res: dict):
     txt_safe = _escape_html(text)
 
     chips = []
-    for model_name in ["BERTurk", "Electra", "CNN-BiLSTM", "BiLSTM", "CNN"]:
+    for model_name in TRANSFORMER_MODELS + CLASSICAL_MODELS:
         pred = res.get(model_name, (0, 0))[0] if res.get(model_name) else 0
-        dot_color = "#3fb950" if pred == 1 else "#f85149"
+        dot_color = POS_COLOR if pred == 1 else NEG_COLOR
 
         chip_html = f"""
 <div class="pred-chip">
@@ -128,12 +150,13 @@ def extract_year(date_str):
 
 
 def min_max_normalize(series):
-    """Normalize a pandas Series to 0-1 range using Min-Max normalization."""
-    min_val = series.min()
+    """Normalize a pandas Series using max-normalization."""
+    if len(series) == 0:
+        return pd.Series(dtype=float)
     max_val = series.max()
-    if max_val == min_val:
-        return pd.Series([0.5] * len(series), index=series.index)
-    return (series - min_val) / (max_val - min_val)
+    if pd.isna(max_val) or max_val == 0:
+        return pd.Series([0] * len(series), index=series.index)
+    return series / max_val
 
 
 @st.cache_data
@@ -307,11 +330,48 @@ st.markdown(
     /* Model cards */
     .model-card-positive {
         border-top: 4px solid #3fb950;
-        background: linear-gradient(180deg, rgba(63, 185, 80, 0.08) 0%, rgba(22, 27, 34, 0.1) 100%);
+        background: linear-gradient(180deg, rgba(63, 185, 80, 0.24) 0%, rgba(22, 27, 34, 0.18) 100%);
+        box-shadow: 0 10px 28px rgba(63, 185, 80, 0.16), inset 0 0 0 1px rgba(63, 185, 80, 0.22);
     }
     .model-card-negative {
         border-top: 4px solid #f85149;
-        background: linear-gradient(180deg, rgba(248, 81, 73, 0.08) 0%, rgba(22, 27, 34, 0.1) 100%);
+        background: linear-gradient(180deg, rgba(248, 81, 73, 0.24) 0%, rgba(22, 27, 34, 0.18) 100%);
+        box-shadow: 0 10px 28px rgba(248, 81, 73, 0.16), inset 0 0 0 1px rgba(248, 81, 73, 0.24);
+    }
+    .result-card {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 18px;
+        min-height: 165px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .result-model-name {
+        margin: 0;
+        min-height: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #8b949e;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.9px;
+        font-size: 0.78rem;
+    }
+    .result-emoji {
+        font-size: 2.7rem;
+        margin: 9px 0;
+        line-height: 1;
+    }
+    .result-sentiment {
+        margin: 0;
+        letter-spacing: 0.5px;
+        font-size: 1.72rem;
+        line-height: 1.08;
+        font-weight: 800;
     }
 
     /* Text area */
@@ -346,10 +406,10 @@ st.markdown(
         text-transform: none !important;
     }
     div.stButton > button[kind="primary"], button[kind="primary"] {
-        background: linear-gradient(180deg, #2ea043 0%, #238636 100%) !important;
+        background: linear-gradient(180deg, rgba(46, 160, 67, 0.82) 0%, rgba(35, 134, 54, 0.76) 100%) !important;
         color: #ffffff !important;
-        border: 1px solid rgba(240, 246, 252, 0.18) !important;
-        box-shadow: 0 8px 20px rgba(46, 160, 67, 0.28) !important;
+        border: 1px solid rgba(240, 246, 252, 0.24) !important;
+        box-shadow: 0 8px 20px rgba(46, 160, 67, 0.20) !important;
     }
     div.stButton > button[kind="secondary"], button[kind="secondary"] {
         background: rgba(56, 139, 253, 0.12) !important;
@@ -407,6 +467,69 @@ st.markdown(
         margin: 0 0 12px 0;
     }
 
+    .theme-switch-title {
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: #8b949e;
+        margin: 4px 0 6px 2px;
+    }
+
+    /* Theme segmented control readability */
+    div[data-testid="stSegmentedControl"] {
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid #30363d;
+        background: rgba(13, 17, 23, 0.42);
+    }
+    div[data-testid="stSegmentedControl"] button,
+    div[data-testid="stSegmentedControl"] [role="radio"] {
+        color: #c9d1d9 !important;
+        font-weight: 700 !important;
+    }
+    div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+    div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"] {
+        color: #ffffff !important;
+        background: rgba(56, 139, 253, 0.40) !important;
+        border: 1px solid rgba(121, 192, 255, 0.65) !important;
+    }
+    div[data-testid="stSegmentedControl"] button[aria-pressed="false"],
+    div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="false"] {
+        color: #9fb0c1 !important;
+        background: transparent !important;
+    }
+    div[data-baseweb="button-group"] {
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid #30363d;
+        background: rgba(13, 17, 23, 0.42);
+    }
+    div[data-baseweb="button-group"] button {
+        color: #c9d1d9 !important;
+        font-weight: 700 !important;
+    }
+    div[data-baseweb="button-group"] button[aria-pressed="true"] {
+        color: #ffffff !important;
+        background: rgba(56, 139, 253, 0.38) !important;
+        border: 1px solid rgba(121, 192, 255, 0.6) !important;
+    }
+    div[data-baseweb="button-group"] button[aria-pressed="false"] {
+        color: #9fb0c1 !important;
+        background: transparent !important;
+    }
+    div[data-testid="stSegmentedControl"] button:nth-child(1),
+    div[data-testid="stSegmentedControl"] [role="radio"]:nth-child(1),
+    div[data-baseweb="button-group"] button:nth-child(1) {
+        background: #e2e8f0 !important;
+        border: 1px solid #93c5fd !important;
+    }
+    div[data-testid="stSegmentedControl"] button:nth-child(1) *,
+    div[data-testid="stSegmentedControl"] [role="radio"]:nth-child(1) *,
+    div[data-baseweb="button-group"] button:nth-child(1) * {
+        color: #1e293b !important;
+    }
+
     /* =========================
        DATA LAB SAMPLE CARDS
        ========================= */
@@ -439,21 +562,8 @@ st.markdown(
     }
     .lab-preds {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 8px;
-    }
-    /* Üst satır: BERTurk ve Electra (her biri 3 kolon kaplayacak = toplam 6 kolon) */
-    .pred-chip:nth-child(1) {
-        grid-column: span 3;
-    }
-    .pred-chip:nth-child(2) {
-        grid-column: span 3;
-    }
-    /* Alt satır: CNN-BiLSTM, BiLSTM, CNN (her biri 2 kolon kaplayacak = toplam 6 kolon) */
-    .pred-chip:nth-child(3),
-    .pred-chip:nth-child(4),
-    .pred-chip:nth-child(5) {
-        grid-column: span 2;
     }
     .pred-chip {
         background: rgba(22, 27, 34, 0.65);
@@ -488,19 +598,198 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if IS_LIGHT_THEME:
+    st.markdown(
+        """
+        <style>
+        ::-webkit-scrollbar { background: #e2e8f0 !important; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8 !important; }
+        ::-webkit-scrollbar-thumb:hover { background: #2563eb !important; }
+
+        .stApp {
+            background-color: #f5f7fb !important;
+            background-image:
+                radial-gradient(circle at 12% 16%, rgba(37, 99, 235, 0.11) 0%, transparent 28%),
+                radial-gradient(circle at 84% 82%, rgba(22, 163, 74, 0.10) 0%, transparent 26%) !important;
+            color: #0f172a !important;
+        }
+
+        h1, h2, h3, h4, h5, h6 { color: #0f172a !important; }
+        p, span, label { color: #1f2937; }
+        .main-title {
+            background: linear-gradient(135deg, #0f4ec4 0%, #2563eb 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            text-shadow: none !important;
+        }
+        .subtitle { color: #334155 !important; }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.94) !important;
+            border: 1px solid rgba(15, 23, 42, 0.12) !important;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10) !important;
+        }
+        .glass-card:hover {
+            border-color: rgba(37, 99, 235, 0.35) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14) !important;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1px solid rgba(15, 23, 42, 0.10) !important;
+        }
+        .metric-card:hover {
+            background: #ffffff !important;
+            border-color: #2563eb !important;
+        }
+
+        .model-card-positive {
+            border-top-color: #16a34a !important;
+            background: linear-gradient(180deg, rgba(22, 163, 74, 0.27) 0%, rgba(255, 255, 255, 0.98) 100%) !important;
+            box-shadow: 0 10px 24px rgba(22, 163, 74, 0.20), inset 0 0 0 1px rgba(22, 163, 74, 0.28) !important;
+        }
+        .model-card-negative {
+            border-top-color: #dc2626 !important;
+            background: linear-gradient(180deg, rgba(220, 38, 38, 0.23) 0%, rgba(255, 255, 255, 0.98) 100%) !important;
+            box-shadow: 0 10px 24px rgba(220, 38, 38, 0.20), inset 0 0 0 1px rgba(220, 38, 38, 0.26) !important;
+        }
+        .result-model-name { color: #475569 !important; }
+
+        .stTextArea textarea {
+            background-color: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #0f172a !important;
+        }
+        .stTextArea textarea::placeholder { color: #64748b !important; }
+        .stTextArea textarea:focus {
+            border-color: #2563eb !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18) !important;
+        }
+
+        div.stButton > button[kind="primary"], button[kind="primary"] {
+            background: linear-gradient(180deg, rgba(34, 197, 94, 0.74) 0%, rgba(22, 163, 74, 0.72) 100%) !important;
+            border: 1px solid rgba(15, 23, 42, 0.15) !important;
+            color: #ffffff !important;
+            box-shadow: 0 8px 18px rgba(22, 163, 74, 0.20) !important;
+        }
+        div.stButton > button[kind="secondary"], button[kind="secondary"] {
+            background: rgba(37, 99, 235, 0.10) !important;
+            color: #1e293b !important;
+            border: 1px solid rgba(37, 99, 235, 0.35) !important;
+        }
+
+        .stTabs [data-baseweb="tab-list"] { border-bottom-color: #d1d5db !important; }
+        .stTabs [data-baseweb="tab"] { color: #475569 !important; }
+        .stTabs [data-baseweb="tab"]:hover { color: #1e293b !important; }
+        .stTabs [aria-selected="true"] { color: #2563eb !important; }
+
+        div[data-testid="stDataFrame"] { border-color: #cbd5e1 !important; }
+        .section-header { color: #0f172a !important; }
+        .theme-switch-title { color: #475569 !important; }
+
+        div[data-testid="stSegmentedControl"] {
+            border-color: #cbd5e1 !important;
+            background: #e2e8f0 !important;
+        }
+        div[data-testid="stSegmentedControl"] button,
+        div[data-testid="stSegmentedControl"] [role="radio"] {
+            color: #334155 !important;
+        }
+        div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+        div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"] {
+            color: #0f172a !important;
+            background: #ffffff !important;
+            border: 1px solid #2563eb !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15) !important;
+        }
+        div[data-testid="stSegmentedControl"] button[aria-pressed="false"],
+        div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="false"] {
+            color: #334155 !important;
+            background: transparent !important;
+        }
+        div[data-baseweb="button-group"] {
+            border-color: #cbd5e1 !important;
+            background: #e2e8f0 !important;
+        }
+        div[data-baseweb="button-group"] button {
+            color: #334155 !important;
+        }
+        div[data-baseweb="button-group"] button[aria-pressed="true"] {
+            color: #0f172a !important;
+            background: #ffffff !important;
+            border: 1px solid #2563eb !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15) !important;
+        }
+        div[data-baseweb="button-group"] button[aria-pressed="false"] {
+            color: #334155 !important;
+            background: transparent !important;
+        }
+        div[data-testid="stSegmentedControl"] button:nth-child(1),
+        div[data-testid="stSegmentedControl"] [role="radio"]:nth-child(1),
+        div[data-baseweb="button-group"] button:nth-child(1) {
+            background: #e2e8f0 !important;
+            border: 1px solid #93c5fd !important;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.14) !important;
+        }
+        div[data-testid="stSegmentedControl"] button:nth-child(1) *,
+        div[data-testid="stSegmentedControl"] [role="radio"]:nth-child(1) *,
+        div[data-baseweb="button-group"] button:nth-child(1) * {
+            color: #1e293b !important;
+        }
+
+        .lab-textbox {
+            background: #f8fafc !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #1e293b !important;
+        }
+        .lab-meta { color: #475569 !important; }
+        .pred-chip {
+            background: #ffffff !important;
+            border: 1px solid #d1d5db !important;
+        }
+        .pred-left { color: #0f172a !important; }
+
+        [style*="color:#ffffff"], [style*="color: #ffffff"] { color: #0f172a !important; }
+        [style*="color:#c9d1d9"], [style*="color: #c9d1d9"] { color: #1f2937 !important; }
+        [style*="color:#8b949e"], [style*="color: #8b949e"] { color: #475569 !important; }
+        [style*="border: 2px dashed #30363d"] { border: 2px dashed #94a3b8 !important; }
+        [style*="border:1px dashed rgba(48,54,61,0.55)"] { border: 1px dashed rgba(71, 85, 105, 0.55) !important; }
+        [style*="text-shadow:0 0 10px rgba(88,166,255,0.2)"] { text-shadow: none !important; }
+
+        div[data-testid="stCodeBlock"] pre {
+            background: #f8fafc !important;
+            color: #0f172a !important;
+            border: 1px solid #cbd5e1 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # =====================================================================
 # HEADER SECTION
 # =====================================================================
-col_brand, col_title = st.columns([1, 6])
+col_brand, col_title, col_theme = st.columns([1, 4.4, 1.6])
 with col_brand:
     try:
         st.image("assets/ytu_logo.png", width=120)
     except Exception:
-        st.markdown("<h1 style='font-size:4rem; color:#58a6ff;'>S</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='font-size:4rem; color:{ANALYSIS_HEADING_COLOR};'>S</h1>", unsafe_allow_html=True)
 
 with col_title:
-    st.markdown('<h1 class="main-title">Turkish Universities Sentiment Model</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">Türk Üniversiteleri Duygu Analiz Modeli</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Üniversite yorumları için duygu analizi platformu</p>', unsafe_allow_html=True)
+
+with col_theme:
+    st.markdown('<div class="theme-switch-title">Tema Modu</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Tema",
+        ["Karanlık", "Aydınlık"],
+        format_func=lambda x: "🌙 Karanlık" if x == "Karanlık" else "☀️ Aydınlık",
+        key="theme_mode",
+        label_visibility="collapsed",
+    )
 
 # =====================================================================
 # MAIN TABS
@@ -520,7 +809,7 @@ with tab_live:
             <div class="glass-card">
                 <h3 style="margin-top:0; color:#c9d1d9;">Yorum Analizi</h3>
                 <p style="color:#8b949e; font-size:0.95rem; margin-bottom:18px;">
-                    Aşağıya bir metin girin ve 5 farklı modelin (BERTurk, Electra, CNN-BiLSTM, BiLSTM, CNN) anlık duygu analizini izleyin.
+                    Aşağıya bir metin girin ve 6 farklı modelin (BERTurk, Electra, TabiBERT, CNN-BiLSTM, BiLSTM, CNN) anlık duygu analizini izleyin.
                 </p>
             """,
             unsafe_allow_html=True,
@@ -607,14 +896,13 @@ with tab_live:
         if st.session_state["last_results"]:
             results = st.session_state["last_results"]
             
-            # Üst satır: BERT modelleri (BERTurk, Electra)
+            # Üst satır: Transformer modeller (BERTurk, Electra, TabiBERT)
             st.markdown('<div style="margin-bottom:10px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Transformer Models</span></div>', unsafe_allow_html=True)
-            c_bert1, c_bert2 = st.columns(2, gap="medium")
-            bert_models = ["BERTurk", "Electra"]
+            transformer_cols = st.columns(len(TRANSFORMER_MODELS), gap="medium")
             
-            for i, model_name in enumerate(bert_models):
+            for i, model_name in enumerate(TRANSFORMER_MODELS):
                 data = results.get(model_name)
-                target_col = c_bert1 if i == 0 else c_bert2
+                target_col = transformer_cols[i]
                 
                 with target_col:
                     if data is None:
@@ -624,14 +912,14 @@ with tab_live:
                         sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
                         card_class = "model-card-positive" if pred == 1 else "model-card-negative"
                         emoji = "😊" if pred == 1 else "😡"
-                        text_color = "#3fb950" if pred == 1 else "#f85149"
+                        text_color = POS_COLOR if pred == 1 else NEG_COLOR
 
                         st.markdown(
                             f"""
-                            <div class="glass-card {card_class}" style="text-align:center; margin-bottom:20px; padding:20px; min-height:160px; display:flex; flex-direction:column; justify-content:center;">
-                                <h5 style="color:#8b949e; margin:0; font-weight:700; text-transform:uppercase; letter-spacing:1px; font-size:0.8rem;">{model_name}</h5>
-                                <div style="font-size:3rem; margin:10px 0;">{emoji}</div>
-                                <h3 style="color:{text_color}; margin:0; letter-spacing:0.5px;">{sentiment}</h3>
+                            <div class="glass-card {card_class} result-card">
+                                <div class="result-model-name">{model_name}</div>
+                                <div class="result-emoji">{emoji}</div>
+                                <div class="result-sentiment" style="color:{text_color};">{sentiment}</div>
                             </div>
                             """,
                             unsafe_allow_html=True,
@@ -639,17 +927,11 @@ with tab_live:
             
             # Alt satır: Klasik modeller (CNN-BiLSTM, BiLSTM, CNN)
             st.markdown('<div style="margin-bottom:10px; margin-top:20px;"><span style="color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Classical Models</span></div>', unsafe_allow_html=True)
-            c_cls1, c_cls2, c_cls3 = st.columns(3, gap="small")
-            classical_models = ["CNN-BiLSTM", "BiLSTM", "CNN"]
+            classical_cols = st.columns(len(CLASSICAL_MODELS), gap="small")
             
-            for i, model_name in enumerate(classical_models):
+            for i, model_name in enumerate(CLASSICAL_MODELS):
                 data = results.get(model_name)
-                if i == 0:
-                    target_col = c_cls1
-                elif i == 1:
-                    target_col = c_cls2
-                else:
-                    target_col = c_cls3
+                target_col = classical_cols[i]
                 
                 with target_col:
                     if data is None:
@@ -659,14 +941,14 @@ with tab_live:
                         sentiment = "POZİTİF" if pred == 1 else "NEGATİF"
                         card_class = "model-card-positive" if pred == 1 else "model-card-negative"
                         emoji = "😊" if pred == 1 else "😡"
-                        text_color = "#3fb950" if pred == 1 else "#f85149"
+                        text_color = POS_COLOR if pred == 1 else NEG_COLOR
 
                         st.markdown(
                             f"""
-                            <div class="glass-card {card_class}" style="text-align:center; margin-bottom:20px; padding:16px; min-height:140px; display:flex; flex-direction:column; justify-content:center;">
-                                <h5 style="color:#8b949e; margin:0; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; font-size:0.7rem;">{model_name}</h5>
-                                <div style="font-size:2.5rem; margin:8px 0;">{emoji}</div>
-                                <h4 style="color:{text_color}; margin:0; letter-spacing:0.4px; font-size:1.1rem;">{sentiment}</h4>
+                            <div class="glass-card {card_class} result-card">
+                                <div class="result-model-name">{model_name}</div>
+                                <div class="result-emoji">{emoji}</div>
+                                <div class="result-sentiment" style="color:{text_color};">{sentiment}</div>
                             </div>
                             """,
                             unsafe_allow_html=True,
@@ -707,8 +989,8 @@ with tab_dashboard:
             st.markdown(
                 f"""
                 <div class="metric-card">
-                    <div style="color:#8b949e; font-size:0.9rem; margin-bottom:5px;">{label}</div>
-                    <div style="color:#ffffff; font-size:2rem; font-weight:800; text-shadow:0 0 10px rgba(88,166,255,0.2);">{value}</div>
+                    <div style="color:{METRIC_LABEL_COLOR}; font-size:0.9rem; margin-bottom:5px;">{label}</div>
+                    <div style="color:{METRIC_VALUE_COLOR}; font-size:2rem; font-weight:800; text-shadow:{METRIC_VALUE_SHADOW};">{value}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -741,15 +1023,27 @@ with tab_dashboard:
             y="Macro F1",
             text=metrics_df["Macro F1"].apply(lambda x: f"%{x*100:.1f}"),
             color="Macro F1",
-            color_continuous_scale=["#1a7f37", "#3fb950"],
+            color_continuous_scale=["#1a7f37", POS_COLOR],
             height=320,
         )
         fig_bar.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#c9d1d9"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", range=[0, 1.05]),
-            xaxis=dict(showgrid=False),
+            font=dict(color=PLOT_FONT_COLOR),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor=PLOT_GRID_COLOR,
+                range=[0, 1.05],
+                tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                title_font=dict(color=PLOT_TITLE_COLOR, size=13),
+                zerolinecolor=PLOT_GRID_COLOR,
+            ),
+            xaxis=dict(
+                showgrid=False,
+                tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                title_font=dict(color=PLOT_TITLE_COLOR, size=13),
+                linecolor=PLOT_GRID_COLOR,
+            ),
             coloraxis_showscale=False,
             margin=dict(t=10, l=0, r=0, b=0),
         )
@@ -807,17 +1101,25 @@ with tab_dashboard:
                             labels=["Pozitif", "Negatif"],
                             values=[p, n],
                             hole=0.6,
-                            marker=dict(colors=["#3fb950", "#f85149"], line=dict(color="#0d1117", width=2)),
+                            marker=dict(colors=[POS_COLOR, NEG_COLOR], line=dict(color=PIE_BORDER_COLOR, width=2)),
                         )
                     ]
                 )
                 fig_pie.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#c9d1d9"),
+                    font=dict(color=PLOT_FONT_COLOR),
                     margin=dict(t=0, b=0, l=0, r=0),
                     height=280,
                     showlegend=True,
-                    legend=dict(orientation="h", x=0.15, y=-0.1),
+                    legend=dict(
+                        orientation="h",
+                        x=0.15,
+                        y=-0.1,
+                        font=dict(color=PLOT_FONT_COLOR, size=12),
+                        bgcolor=PLOT_LEGEND_BG,
+                        bordercolor=PLOT_LEGEND_BORDER,
+                        borderwidth=1,
+                    ),
                 )
                 st.plotly_chart(fig_pie, use_container_width=True)
         else:
@@ -857,9 +1159,9 @@ with tab_dashboard:
     st.write("")
     st.markdown("---")
     st.markdown(
-        """
+        f"""
         <div style="text-align:center; margin: 30px 0 20px 0;">
-            <h2 style="color:#79c0ff; font-weight:800; font-size:2rem; letter-spacing:-0.5px;">Yıllara Göre Analiz</h2>
+            <h2 style="color:{ANALYSIS_HEADING_COLOR}; font-weight:800; font-size:2rem; letter-spacing:-0.5px;">Yıllara Göre Analiz</h2>
             <p style="color:#8b949e; font-size:1rem;">Üniversitelerin yıllar içindeki popülerlik ve duygu trendleri...</p>
         </div>
         """,
@@ -926,7 +1228,7 @@ with tab_dashboard:
                     x=uni_data['year'],
                     y=uni_data['normalized_count'],
                     mode='lines',
-                    name=f"{'⭐ ' if is_top else ''}{uni}",
+                    name=uni,
                     line=dict(
                         width=line_width, 
                         color=all_colors[color_idx],
@@ -939,34 +1241,40 @@ with tab_dashboard:
             fig_hype.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#c9d1d9"),
+                font=dict(color=PLOT_FONT_COLOR),
                 yaxis=dict(
                     title="Etkileşim Yoğunluğu (Normalize)",
                     showgrid=True,
-                    gridcolor="rgba(255,255,255,0.05)",
-                    range=[0, 1.05]
+                    gridcolor=PLOT_GRID_COLOR,
+                    range=[0, 1.05],
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
+                    zerolinecolor=PLOT_GRID_COLOR,
                 ),
                 xaxis=dict(
-                    title="Yıl",
+                    title=None,
                     showgrid=False,
                     tickmode='array',
                     tickvals=all_years,
                     ticktext=[str(year) for year in all_years],
-                    range=[min(all_years) - 0.3, max(all_years) + 0.3]  # Add padding to show 2025 fully
+                    range=[min(all_years) - 0.3, max(all_years) + 0.3],  # Add padding to show 2025 fully
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
+                    linecolor=PLOT_GRID_COLOR,
                 ),
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
-                    y=-0.4,
+                    y=-0.46,
                     xanchor="center",
                     x=0.5,
-                    bgcolor="rgba(22, 27, 34, 0.8)",
-                    bordercolor="rgba(240, 246, 252, 0.15)",
+                    bgcolor=PLOT_LEGEND_BG,
+                    bordercolor=PLOT_LEGEND_BORDER,
                     borderwidth=1,
-                    font=dict(size=11)
+                    font=dict(size=HYPE_LEGEND_FONT_SIZE, color=PLOT_FONT_COLOR),
                 ),
                 height=550,  # Increased height for better visibility
-                margin=dict(t=10, l=0, r=0, b=90),
+                margin=dict(t=10, l=0, r=0, b=140),
                 hovermode='x unified'
             )
             st.plotly_chart(fig_hype, use_container_width=True)
@@ -1016,7 +1324,7 @@ with tab_dashboard:
                     y=turkey_avg['avg_sentiment_pct'],
                     mode='lines',
                     name='Türkiye Ortalaması',
-                    line=dict(width=2, color='#8b949e', dash='dash'),
+                    line=dict(width=2, color=TURKEY_AVG_LINE_COLOR, dash='dash'),
                     hovertemplate='<b>Türkiye Ort.</b><br>Yıl: %{x}<br>Pozitiflik: %{y:.1f}%<extra></extra>'
                 ))
             
@@ -1028,7 +1336,7 @@ with tab_dashboard:
                     y=uni_sentiment_data['avg_sentiment_pct'],
                     mode='lines+markers',
                     name=selected_uni_sentiment,
-                    line=dict(width=4, color='#3fb950'),
+                    line=dict(width=4, color=POS_COLOR),
                     marker=dict(size=10, symbol='circle'),
                     hovertemplate=f'<b>{selected_uni_sentiment}</b><br>Yıl: %{{x}}<br>Pozitiflik: %{{y:.1f}}%<extra></extra>'
                 ))
@@ -1036,20 +1344,26 @@ with tab_dashboard:
             fig_sentiment.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#c9d1d9"),
+                font=dict(color=PLOT_FONT_COLOR),
                 yaxis=dict(
                     title="Pozitiflik Oranı (%)",
                     showgrid=True,
-                    gridcolor="rgba(255,255,255,0.05)",
-                    range=[0, 100]
+                    gridcolor=PLOT_GRID_COLOR,
+                    range=[0, 100],
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
+                    zerolinecolor=PLOT_GRID_COLOR,
                 ),
                 xaxis=dict(
-                    title="Yıl",
+                    title=None,
                     showgrid=False,
                     tickmode='array',
                     tickvals=all_years_sentiment,
                     ticktext=[str(year) for year in all_years_sentiment],
-                    range=[min(all_years_sentiment) - 0.3, max(all_years_sentiment) + 0.3]  # Add padding to show 2025 fully
+                    range=[min(all_years_sentiment) - 0.3, max(all_years_sentiment) + 0.3],  # Add padding to show 2025 fully
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
+                    linecolor=PLOT_GRID_COLOR,
                 ),
                 legend=dict(
                     orientation="v",
@@ -1057,9 +1371,10 @@ with tab_dashboard:
                     y=0.98,
                     xanchor="left",
                     x=0.02,
-                    bgcolor="rgba(22, 27, 34, 0.8)",
-                    bordercolor="rgba(240, 246, 252, 0.1)",
-                    borderwidth=1
+                    bgcolor=PLOT_LEGEND_BG,
+                    bordercolor=PLOT_LEGEND_BORDER,
+                    borderwidth=1,
+                    font=dict(color=PLOT_FONT_COLOR, size=12),
                 ),
                 height=400,
                 margin=dict(t=10, l=0, r=0, b=40),
@@ -1089,20 +1404,21 @@ with tab_dashboard:
                 x=heatmap_data.columns,
                 y=heatmap_data.index,
                 colorscale=[
-                    [0, '#f85149'],      # Red for negative
+                    [0, NEG_COLOR],      # Red for negative
                     [0.5, '#e3b341'],    # Yellow for neutral
-                    [1, '#3fb950']       # Green for positive
+                    [1, POS_COLOR]       # Green for positive
                 ],
                 text=heatmap_data.values.round(1),
                 texttemplate='%{text:.1f}%',
-                textfont={"size": 10},
+                textfont={"size": 10, "color": PLOT_FONT_COLOR},
                 colorbar=dict(
-                    title="Pozitif %",
+                    title=dict(text="Pozitif %", font=dict(color=PLOT_TITLE_COLOR)),
                     tickmode="linear",
                     tick0=0,
                     dtick=25,
                     thickness=15,
-                    len=0.7
+                    len=0.7,
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
                 ),
                 hovertemplate='<b>%{y}</b><br>Yıl: %{x}<br>Pozitiflik: %{z:.1f}%<extra></extra>'
             ))
@@ -1110,14 +1426,19 @@ with tab_dashboard:
             fig_heatmap.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#c9d1d9"),
+                font=dict(color=PLOT_FONT_COLOR),
                 xaxis=dict(
-                    title="Yıl",
+                    title=None,
                     side="bottom",
-                    dtick=1
+                    dtick=1,
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
+                    linecolor=PLOT_GRID_COLOR,
                 ),
                 yaxis=dict(
-                    title="Üniversite",
+                    title=None,
+                    tickfont=dict(color=PLOT_FONT_COLOR, size=PLOT_AXIS_TICK_SIZE),
+                    title_font=dict(color=PLOT_TITLE_COLOR, size=14),
                 ),
                 height=400,
                 margin=dict(t=10, l=120, r=0, b=40),
